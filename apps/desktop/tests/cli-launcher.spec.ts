@@ -8,7 +8,9 @@ import { dirname, join, relative } from 'node:path'
 import { expect, it, onTestFinished } from 'vitest'
 import { prepareDesktopCli } from '../scripts/prepare-cli.ts'
 
-function fixture() {
+const platforms = process.platform === 'win32' ? ['win32'] as const : ['darwin', 'linux'] as const
+
+function fixture(platform: 'darwin' | 'win32' | 'linux') {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'dsh-cli-launcher-')))
   const children: ChildProcessWithoutNullStreams[] = []
   const exits: Promise<unknown>[] = []
@@ -20,21 +22,22 @@ function fixture() {
     await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
   })
   const application = join(root, 'Application 中文 with spaces.app')
-  const platform = process.platform === 'win32' ? 'win32' : 'darwin'
   const resources = join(application, ...platform === 'darwin' ? ['Contents', 'Resources'] : ['resources'])
   const cli = join(resources, 'runtime', 'cli')
   prepareDesktopCli(cli, platform)
-  const electron = join(application, ...platform === 'darwin' ? ['Contents', 'MacOS', 'DeepSeek Harness'] : ['DeepSeek Harness.exe'])
-  mkdirSync(dirname(electron), { recursive: true })
-  if (platform === 'win32') copyFileSync(process.execPath, electron)
-  else symlinkSync(process.execPath, electron)
-  const entry = join(resources, 'app.asar', 'dsh', 'node_modules', '@deepseek-ai', 'dsh-desktop-host', 'lib', 'cli.js')
+  const node = platform === 'linux' ? join(resources, 'runtime', 'primary-runtime', 'dependencies', 'node', 'bin', 'node')
+    : join(application, ...platform === 'darwin' ? ['Contents', 'MacOS', 'DeepSeek Harness'] : ['DeepSeek Harness.exe'])
+  mkdirSync(dirname(node), { recursive: true })
+  if (platform === 'win32') copyFileSync(process.execPath, node)
+  else symlinkSync(process.execPath, node)
+  const dsh = platform === 'linux' ? join(resources, 'dsh') : join(resources, 'app.asar', 'dsh')
+  const entry = join(dsh, 'node_modules', '@deepseek-ai', 'dsh-desktop-host', 'lib', 'cli.js')
   mkdirSync(dirname(entry), { recursive: true })
   writeFileSync(join(dirname(entry), 'package.json'), '{"type":"module"}\n')
   writeFileSync(entry, [
     'const chunks = []',
     'for await (const chunk of process.stdin) chunks.push(chunk)',
-    "process.stdout.write(JSON.stringify({ args: process.argv.slice(2), cwd: process.cwd(), value: process.env.DSH_CLI_TEST_VALUE, nodeMode: process.env.ELECTRON_RUN_AS_NODE, input: Buffer.concat(chunks).toString('hex') }))",
+    "process.stdout.write(JSON.stringify({ args: process.argv.slice(2), cwd: process.cwd(), value: process.env.DSH_CLI_TEST_VALUE, nodeMode: process.env.ELECTRON_RUN_AS_NODE ?? null, input: Buffer.concat(chunks).toString('hex') }))",
     "process.stderr.write('separate stderr\\n')",
     'process.exitCode = 23',
     '',
@@ -44,9 +47,9 @@ function fixture() {
     // cmd fixture inputs contain no metacharacters; POSIX cases exercise literal expansion characters separately.
     const child = platform === 'win32'
       ? spawn(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `""${executable}" ${args.map(value => `"${value}"`).join(' ')}"`], {
-        cwd: root, env: { ...process.env, DSH_CLI_TEST_VALUE: 'kept' }, stdio: 'pipe', windowsVerbatimArguments: true,
+        cwd: root, env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined, DSH_CLI_TEST_VALUE: 'kept' }, stdio: 'pipe', windowsVerbatimArguments: true,
       })
-      : spawn(executable, args, { cwd: root, env: { ...process.env, DSH_CLI_TEST_VALUE: 'kept' }, stdio: 'pipe' })
+      : spawn(executable, args, { cwd: root, env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined, DSH_CLI_TEST_VALUE: 'kept' }, stdio: 'pipe' })
     children.push(child)
     const closed = new Promise<number | null>((resolve, reject) => {
       child.once('error', reject)
@@ -62,19 +65,19 @@ function fixture() {
   return { root, command, start }
 }
 
-it('preserves common arguments, cwd, environment, binary input, stderr and exit status', async () => {
-  const f = fixture()
+it.each(platforms)('%s launcher preserves arguments, cwd, environment, binary input, stderr and exit status', async (platform) => {
+  const f = fixture(platform)
   const args = ['plugin', '--profile', 'desktop', 'hello world', '中文 🚀', '']
   const run = f.start(args)
   const input = Buffer.from([0, 1, 10, 255])
   run.child.stdin.end(input)
   expect(await run.closed, run.stderr()).toBe(23)
-  expect(JSON.parse(run.stdout())).toEqual({ args, cwd: f.root, value: 'kept', nodeMode: '1', input: input.toString('hex') })
+  expect(JSON.parse(run.stdout())).toEqual({ args, cwd: f.root, value: 'kept', nodeMode: platform === 'linux' ? null : '1', input: input.toString('hex') })
   expect(run.stderr()).toBe('separate stderr\n')
 })
 
-it.skipIf(process.platform === 'win32')('resolves chained command symlinks without expanding argument contents', async () => {
-  const f = fixture()
+it.skipIf(process.platform === 'win32').each(['darwin', 'linux'] as const)('%s launcher resolves chained symlinks without expanding argument contents', async (platform) => {
+  const f = fixture(platform)
   const link = join(f.root, 'command-link')
   const command = join(f.root, 'dsh')
   symlinkSync(relative(f.root, f.command), link)
@@ -83,5 +86,5 @@ it.skipIf(process.platform === 'win32')('resolves chained command symlinks witho
   const run = f.start(args, command)
   run.child.stdin.end()
   expect(await run.closed, run.stderr()).toBe(23)
-  expect(JSON.parse(run.stdout())).toMatchObject({ args, cwd: f.root, nodeMode: '1' })
+  expect(JSON.parse(run.stdout())).toMatchObject({ args, cwd: f.root, nodeMode: platform === 'linux' ? null : '1' })
 })

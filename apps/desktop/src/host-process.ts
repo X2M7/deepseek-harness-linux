@@ -1,4 +1,4 @@
-/** Electron Node-mode child lifecycle for the shared Web application. */
+/** Bundled Node child lifecycle for the shared Web application. */
 
 import { spawn, type ChildProcess } from 'node:child_process'
 import { join } from 'node:path'
@@ -134,7 +134,7 @@ export class DesktopHostFatalError extends Error {
   get diagnostic(): string | undefined { return this.#diagnostic }
 }
 
-/** One Web backend running under the Electron executable in Node mode. */
+/** One Web backend running under standalone Node on Linux or Electron's Node mode elsewhere. */
 export class DesktopHostProcess {
   private child: ChildProcess | undefined
   private readyResolve!: (ready: DesktopHostReady) => void
@@ -155,7 +155,7 @@ export class DesktopHostProcess {
   }>()
 
   /**
-   * @param node - Absolute Electron executable in Node mode.
+   * @param node - Absolute bundled Node executable, or Electron executable in Node mode.
    * @param runtimeDir - Immutable packages carried by the current application.
    * @param projectDir - Desktop plugin profile and child working directory.
    * @param inspectPort - Optional loopback inspector port for workspace development.

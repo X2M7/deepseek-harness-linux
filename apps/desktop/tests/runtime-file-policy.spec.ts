@@ -85,6 +85,19 @@ it('retains native prebuilds for the selected macOS architecture', () => {
   expect(desktopRuntimeFileExclusion('node-pty/prebuilds/win32-x64/conpty.node', mac, 'darwin-arm64')).toBeDefined()
 })
 
+it.each(['x64', 'arm64'])('retains Linux %s confinement, locking and terminal binaries', (arch) => {
+  const linux = { platform: 'linux' as const, arch }
+  const engine = arch === 'x64' ? 'linux-x64' : 'wasm'
+  for (const path of [
+    `@deepseek-ai/node-addon-system-linux-${arch}/bin/landlock-run`,
+    `@deepseek-ai/node-addon-system-linux-${arch}/bin/glibc/system.node`,
+    `@deepseek-ai/node-addon-system-linux-${arch}/bin/musl/system.node`,
+    `node-pty/prebuilds/linux-${arch}/pty.node`,
+    `node-pty/prebuilds/linux-${arch}/spawn-helper`,
+  ]) expect(desktopRuntimeFileExclusion(path, linux, engine), path).toBeUndefined()
+  expect(desktopRuntimeFileExclusion('node-pty/prebuilds/darwin-x64/pty.node', linux, engine)).toBeDefined()
+})
+
 it.each([
   ['linux', 'x64', 'linux-x64'],
   ['linux', 'arm64', 'wasm'],

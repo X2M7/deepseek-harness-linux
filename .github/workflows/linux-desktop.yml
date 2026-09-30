@@ -1,0 +1,107 @@
+name: Linux desktop
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Build AppImage and Debian artifacts after validation
+        type: boolean
+        default: false
+      architecture:
+        description: Native Linux architecture to package
+        type: choice
+        options: [x64, arm64]
+        default: x64
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-desktop-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+env:
+  DSH_TELEMETRY_DISABLED: '1'
+
+jobs:
+  check:
+    name: Validate Linux desktop
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Use runner-owned temporary directories
+        run: printf 'TMPDIR=%s\nNODE_COMPILE_CACHE=%s/node-compile-cache\n' "$RUNNER_TEMP" "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: pnpm
+      - name: Install native build and Electron dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y build-essential python3 musl-tools pkg-config libgtk-3-0t64 libnss3 libasound2t64 libxss1 libgbm1 libfuse2t64
+      - name: Install locked workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check Linux desktop behavior
+        run: >-
+          pnpm run test
+          apps/desktop/tests/desktop-build-paths.spec.ts
+          apps/desktop/tests/package-target.spec.ts
+          apps/desktop/tests/desktop-package-environment.spec.ts
+          apps/desktop/tests/linux-packaging.spec.ts
+          apps/desktop/tests/linux-appimage.spec.ts
+          apps/desktop/tests/cli-launcher.spec.ts
+          apps/desktop/tests/runtime-file-policy.spec.ts
+          apps/desktop/tests/development-project.spec.ts
+          apps/desktop/tests/main-startup.spec.ts
+          apps/desktop/tests/platform-view.spec.ts
+          apps/desktop/tests/update-coordinator.spec.ts
+          apps/desktop-host/tests/office-engine.spec.ts
+          --maxWorkers=2
+      - name: Verify Linux guide translations
+        run: pnpm run verify-translation-pairing README.md apps/desktop/README.md apps/desktop-host/README.md
+      - name: Build the desktop and shared runtime
+        run: pnpm run build
+
+  package:
+    name: Package Linux ${{ inputs.architecture }}
+    if: github.event_name == 'workflow_dispatch' && inputs.package
+    needs: check
+    runs-on: ${{ inputs.architecture == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 120
+    steps:
+      - name: Use runner-owned temporary directories
+        run: printf 'TMPDIR=%s\nNODE_COMPILE_CACHE=%s/node-compile-cache\n' "$RUNNER_TEMP" "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: pnpm
+      - name: Install native packaging and Electron dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y build-essential python3 musl-tools pkg-config libgtk-3-0t64 libnss3 libasound2t64 libxss1 libgbm1 libfuse2t64
+      - name: Install locked workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build native Linux artifacts
+        env:
+          DESKTOP_PACKAGE_ARCH: ${{ inputs.architecture }}
+        run: pnpm run "package:desktop:linux:${DESKTOP_PACKAGE_ARCH}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deepseek-harness-linux-${{ inputs.architecture }}-${{ github.sha }}
+          path: |
+            apps/desktop/.desktop-build/targets/linux-${{ inputs.architecture }}/artifacts/*.AppImage
+            apps/desktop/.desktop-build/targets/linux-${{ inputs.architecture }}/artifacts/*.deb
+          if-no-files-found: error
+          retention-days: 14

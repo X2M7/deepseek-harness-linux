@@ -45,12 +45,12 @@ afterEach(() => {
   state.views.length = 0; state.sessions.length = 0; state.loadFailure = undefined; state.loadBarrier = undefined
   vi.clearAllMocks(); vi.unstubAllEnvs()
 })
-function setup() {
+function setup(platform: 'darwin' | 'win32' | null = 'darwin') {
   const removeChildView = vi.fn()
   const owner = Object.assign(new EventEmitter(), {
     webContents: new EventEmitter(), contentView: { addChildView: vi.fn(), removeChildView }, isDestroyed: () => false,
   })
-  const manager = new DesktopPlatformView('/bundled/preload.cjs', () => 'en_US', 'darwin')
+  const manager = new DesktopPlatformView('/bundled/preload.cjs', () => 'en_US', platform)
   manager.setSession({ origin: 'https://platform.deepseek.com', userId: 'fixture-user' as AccountUserId, token: 'fixture-secret' })
   return { manager, owner, removeChildView }
 }
@@ -147,6 +147,15 @@ it('injects the deployment and client identity headers only at the Platform orig
   // A redirect to another origin keeps the injected headers out of the follow-up request.
   expect(interceptHeaders(1, 'https://login.example.com/authorize', request)).toEqual({})
   manager.close()
+})
+
+it('uses the supported web identity for Linux Platform documents', async () => {
+  const { manager, owner } = setup(null)
+  await manager.open(owner, 'usage', bounds)
+  expect(interceptHeaders(1, 'https://platform.deepseek.com/usage', {})).toMatchObject({
+    'x-client-platform': 'web', 'x-client-version': '1.2.3', 'x-client-locale': 'en_US',
+  })
+  await manager.dispose()
 })
 
 it('samples the language and UTC offset on every Platform request', async () => {

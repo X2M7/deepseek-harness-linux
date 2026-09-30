@@ -150,13 +150,19 @@ interface RuntimeResources {
 
 function runtimeResources(): RuntimeResources {
   const development = !app.isPackaged
-  const node = process.execPath
+  // Linux Host dependencies load native libraries that conflict with Electron's GLib. Keep the
+  // shell in Electron and run its physical package tree with the bundled standalone Node instead.
+  const node = process.platform === 'linux'
+    ? join(development ? developmentPrimaryRuntime() : join(process.resourcesPath, 'runtime', 'primary-runtime'),
+      'dependencies', 'node', 'bin', 'node')
+    : process.execPath
   const nodeBin = development ? join(app.getAppPath(), 'scripts', 'node-bin') : join(process.resourcesPath, 'runtime', 'bin')
   const pnpm = (development ? process.env.DSH_DESKTOP_PNPM_ENTRY : undefined)
     ?? (development ? join(app.getAppPath(), 'node_modules', 'pnpm', 'bin', 'pnpm.mjs')
       : join(process.resourcesPath, 'runtime', 'pnpm', 'bin', 'pnpm.mjs'))
   const dsh = (development ? process.env.DSH_DESKTOP_DSH_DIR : undefined)
-    ?? (development ? join(app.getAppPath(), '.desktop-build', 'development', 'project') : join(app.getAppPath(), 'dsh'))
+    ?? (development ? join(app.getAppPath(), '.desktop-build', 'development', 'project')
+      : join(process.platform === 'linux' ? process.resourcesPath : app.getAppPath(), 'dsh'))
   return { node, nodeBin, pnpm, dsh }
 }
 
@@ -438,7 +444,8 @@ async function main(): Promise<void> {
     return next.promise
   }
   const platformView = new DesktopPlatformView(join(app.getAppPath(), 'lib', 'preload-platform-account.cjs'),
-    () => locale.id === 'zh-CN' ? 'zh_CN' : 'en_US', process.platform === 'win32' ? 'win32' : 'darwin')
+    () => locale.id === 'zh-CN' ? 'zh_CN' : 'en_US',
+    process.platform === 'darwin' || process.platform === 'win32' ? process.platform : null)
   const backend = new DesktopBackendController((onFailure) => {
     const hostInspectPort = developmentHostInspectPort(development)
     const host = new DesktopHostProcess(resources.node, resources.dsh, activeProject,
@@ -925,7 +932,7 @@ async function main(): Promise<void> {
   const applicationIconPath = development ? join(app.getAppPath(), 'resources', 'icon-windows.png')
     : join(process.resourcesPath, 'icon.png')
   app.setAboutPanelOptions({
-    applicationName: 'DeepSeek Harness',
+    applicationName: process.platform === 'linux' ? 'DeepSeek Harness Linux' : 'DeepSeek Harness',
     applicationVersion: app.getVersion(),
     // The release has no separate build number; omit Electron's bundle version.
     version: '',
@@ -951,8 +958,9 @@ async function main(): Promise<void> {
       ? { label: currentDesktopLocale().messages.aboutMenu,
         click: () => { void showAbout().catch((error: unknown) => { console.error(error) }) } }
       : { label: currentDesktopLocale().messages.aboutMenu, role: 'about' },
-    { type: 'separator' },
-    { label: currentDesktopLocale().messages.checkUpdatesMenu, click: () => { void openUpdatePrompt(true) } },
+    ...process.platform === 'linux' ? []
+      : [{ type: 'separator' as const },
+        { label: currentDesktopLocale().messages.checkUpdatesMenu, click: () => { void openUpdatePrompt(true) } }],
     ...process.platform === 'darwin' || process.platform === 'win32'
       ? [{ label: currentDesktopLocale().messages.cliCommandMenu, click: () => { void commandManager.show() } }] : [],
     ...development ? [
@@ -1068,11 +1076,12 @@ async function main(): Promise<void> {
     browserGuests.bind(window, (guest, name) => shortcuts.attachGuest(window, guest, name))
     shortcuts.attach(window)
     window.on('focus', automaticCheck)
-    // Closing hides: the page and the Host keep running, and the next show resumes the same document.
+    // Linux has no tray or Dock entry to restore a hidden window; closing uses the ordinary quit flow.
     window.on('close', (event) => {
       if (quitting || shellInstallerOwnsQuit || sessionEnding) return
       event.preventDefault()
       if (updateDialog.isOpen) { updateDialog.focus(); return }
+      if (process.platform === 'linux') { app.quit(); return }
       const hide = (): void => {
         if (!quitting && !shellInstallerOwnsQuit && !sessionEnding && !window.isDestroyed()) hideMainWindow(window)
       }

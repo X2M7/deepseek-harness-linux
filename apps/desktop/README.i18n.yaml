@@ -3,35 +3,50 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write apps/desktop/README.md
 /deepseek-harness-desktop:
-  en: eccac345d51428fa
-  zh: 4a448b3d63cb8117
+  en: a84c974de1dbf19c
+  zh: adb3145fb6444edf
+/deepseek-harness-desktop/linux-desktop:
+  en: 6c4a5019e4b3e87a
+  zh: f32141b036bb139f
+/deepseek-harness-desktop/linux-desktop/build-and-run:
+  en: 54b441a785908316
+  zh: f8aa40800e8cfe31
+/deepseek-harness-desktop/linux-desktop/install-and-use:
+  en: da48e5ecfce4c4ec
+  zh: 6c0262fa4855289b
+/deepseek-harness-desktop/linux-desktop/continuous-integration:
+  en: 782e6481260cd122
+  zh: feeb87c3708ef22d
+/deepseek-harness-desktop/shared-desktop-behavior:
+  en: c5520f0ceebfec50
+  zh: c12b1f4a42358364
 /deepseek-harness-desktop/terminal-command:
-  en: bef92953c237363f
-  zh: d21d6effd21b8c00
+  en: cecc15f8376b1455
+  zh: d4331214e9056b0a
 /deepseek-harness-desktop/closing-the-window-and-quitting:
   en: c323e02e3f0305fe
   zh: 3c730db632136443
 /deepseek-harness-desktop/key-technical-decisions:
-  en: 069fdfd72d2ea26a
-  zh: 76ae549d43c99bb4
+  en: 19448a7feeff5e56
+  zh: 4cdbb22c22584a3c
 /deepseek-harness-desktop/key-technical-decisions/bundled-workspace-dependencies:
-  en: 320733f93ede61a4
-  zh: 33206c3c4753c802
+  en: 3c57ff8d6321a339
+  zh: fba16f1460399462
 /deepseek-harness-desktop/bundled-command-runtime:
-  en: beecf076aa2f0796
-  zh: c9001ce0f22d2379
+  en: a528051486c10489
+  zh: 5201eca03a971bb2
 /deepseek-harness-desktop/installation-ownership:
-  en: 22153a298a6662e1
-  zh: 3600803c8c9d0274
+  en: 8d766b111718fb3d
+  zh: f284fb987b6aca54
 /deepseek-harness-desktop/installation-ownership/runtime-and-plugin-activation:
-  en: 0d11af8639977a6d
-  zh: 86b086b12d2210d3
+  en: 5aac549be38e8ba9
+  zh: f4379a848fe375d3
 /deepseek-harness-desktop/installation-ownership/host-environment:
   en: 84a9cc7ca9455aa8
-  zh: 4091b8aa8231b74a
+  zh: 74f9100a39ec8c2f
 /deepseek-harness-desktop/develop:
-  en: 40d2ad4014bf445b
-  zh: 6a08de06df9ed042
+  en: d9fa296a52b2231c
+  zh: 4222e498f621668c
 /deepseek-harness-desktop/develop/startup-onboarding:
   en: a51346b8d880ddba
   zh: 7913214c1c66063c
@@ -39,11 +54,11 @@
   en: ae319a496639b38d
   zh: ef044103240ac9da
 /deepseek-harness-desktop/package:
-  en: 4cd8a8da6977928d
-  zh: 9f624855a2edac37
+  en: 9cbc12a57a03777b
+  zh: 201586a3a964f982
 /deepseek-harness-desktop/package/release-versions:
-  en: f461b255133384cc
-  zh: 2b9db718f22fdd04
+  en: 1c5fc8f681176246
+  zh: 74bc9935077d2978
 /deepseek-harness-desktop/package/runtime-file-selection:
   en: f0e345fd89868803
   zh: fd2c775ad23fa2f0

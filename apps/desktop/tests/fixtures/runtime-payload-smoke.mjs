@@ -1,8 +1,8 @@
-/** Exercise filtered Desktop native and HTML dependencies under its Electron Node runtime. */
+/** Exercise filtered Desktop native and HTML dependencies under its bundled Node runtime. */
 
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { accessSync, closeSync, constants, mkdtempSync, openSync, readFileSync, writeFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -13,12 +13,33 @@ const runtime = process.argv[2]
 assert.ok(runtime, 'Pass the filtered resources/dsh directory')
 const root = resolve(runtime)
 const descriptor = JSON.parse(readFileSync(join(root, 'desktop-runtime.json'), 'utf8'))
-assert.equal(process.versions.node, descriptor.release.nodeVersion, 'Run with the Electron Node runtime version')
+assert.equal(process.versions.node, descriptor.release.nodeVersion, 'Run with the bundled Node runtime version')
+assert.equal(Boolean(process.versions.electron), process.platform !== 'linux', 'Linux Host dependencies require standalone Node')
 assert.equal(process.platform, descriptor.platform)
 assert.equal(process.arch, descriptor.arch)
 const resourcesRuntime = process.argv[3] ?? join(dirname(root), 'runtime')
 const requireRuntime = createRequire(join(root, 'package.json'))
 const scratch = mkdtempSync(join(tmpdir(), 'dsh-runtime-payload-'))
+let linuxSystem
+
+/** Load Linux confinement and locking from the same physical packages used by the Host. */
+async function checkLinuxSystem() {
+  const { launcherPath, probe } = requireRuntime('@deepseek-ai/node-addon-system/landlock-run')
+  const launcher = launcherPath()
+  accessSync(launcher, constants.X_OK)
+  const result = spawnSync(launcher, ['--probe'], { timeout: 10_000, encoding: 'utf8', env: {} })
+  assert.equal(result.error, undefined, 'Landlock binary must spawn without a timeout or OS error')
+  assert.equal(result.signal, null, 'Landlock probe must exit without a signal')
+  // The package must execute even when the qualification kernel does not enforce Landlock.
+  assert.ok(result.status === 0 || result.status === 125, `Landlock probe failed: ${result.stderr}`)
+  const enforcement = probe(launcher, { timeoutMs: 10_000 })
+  if (result.status === 0) assert.ok(enforcement === 'full' || enforcement === 'partial')
+  else assert.equal(enforcement, 'unusable')
+  const { tryLockExclusive } = requireRuntime('@deepseek-ai/node-addon-system/flock')
+  const fd = openSync(join(scratch, 'system-lock'), 'wx', 0o600)
+  try { await tryLockExclusive(fd) } finally { closeSync(fd) }
+  return { landlock: enforcement, flock: true }
+}
 
 /** Run a package script with only the shipped node launcher available on PATH. */
 function checkPnpm() {
@@ -30,7 +51,7 @@ function checkPnpm() {
   writeFileSync(join(scratch, 'check.cjs'), `
 const assert = require('node:assert/strict')
 assert.equal(process.execPath, ${JSON.stringify(process.execPath)})
-assert.ok(process.versions.electron)
+assert.equal(Boolean(process.versions.electron), process.platform !== 'linux')
 assert.ok(process.execArgv.includes('--expose-internals'))
 assert.equal(typeof require('internal/modules/esm/loader').getOrInitializeCascadedLoader, 'function')
 console.log('desktop-node-script-ok')
@@ -155,6 +176,7 @@ function checkHtml() {
 }
 
 try {
+  if (process.platform === 'linux') linuxSystem = await checkLinuxSystem()
   const builtin = requireRuntime('node-addon-require-builtin')
   assert.equal(typeof builtin.requireBuiltin('internal/modules/esm/loader').getOrInitializeCascadedLoader, 'function')
   checkPnpm()
@@ -171,5 +193,5 @@ try {
 // Natural event-loop drain includes node-pty's worker and console-list helper teardown.
 process.once('beforeExit', () => {
   console.log(JSON.stringify({ node: process.versions.node, platform: process.platform, arch: process.arch,
-    koffi: true, sharp: true, html: true, pty: true, pnpm: true, grep: true, glob: true }))
+    koffi: true, sharp: true, html: true, pty: true, pnpm: true, grep: true, glob: true, ...linuxSystem }))
 })

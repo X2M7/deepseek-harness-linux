@@ -3,25 +3,20 @@ import type { AfterPackContext, BeforePackContext } from 'app-builder-lib'
 /** Electron-builder fields asserted by the Desktop release tests. */
 export interface DesktopElectronBuilderConfig {
   readonly appId: string
+  readonly productName: string
+  readonly electronDist: string
   readonly artifactName: string
   readonly protocols: readonly [{ readonly name: 'DeepSeek Harness'; readonly schemes: readonly ['dsh'] }]
   readonly directories: {
     readonly output: string
   }
-  readonly files: readonly [
-    string,
-    string,
-    string,
-    string,
-    { readonly from: string, readonly to: 'dsh', readonly filter: readonly ['**/*'] },
-    { readonly from: string, readonly to: 'dsh/node_modules', readonly filter: readonly ['**/*'] },
-  ]
-  readonly extraMetadata: { readonly dshDesktopAppId: string }
+  readonly files: readonly (string | { readonly from: string, readonly to: string, readonly filter: readonly ['**/*'] })[]
+  readonly extraMetadata: { readonly dshDesktopAppId: string, readonly desktopName?: string }
   readonly asarUnpack: readonly string[]
   readonly extraResources: readonly [
     { readonly from: string, readonly to: 'runtime' },
     { readonly from: string, readonly to: 'icon.png' },
-    ...{ readonly from: string, readonly to: 'tray.ico' }[],
+    ...({ readonly from: string, readonly to: 'tray.ico' } | { readonly from: string, readonly to: 'dsh' | 'dsh/node_modules', readonly filter: readonly ['**/*'] })[],
   ]
   readonly mac: {
     readonly extendInfo: { readonly NSMicrophoneUsageDescription: string }
@@ -44,6 +39,17 @@ export interface DesktopElectronBuilderConfig {
       readonly signingHashAlgorithms: readonly string[]
     }
   }
+  readonly linux: {
+    readonly executableName: string
+    readonly executableArgs: readonly []
+    readonly syncDesktopName: true
+    readonly icon: string
+    readonly category: string
+    readonly synopsis: string
+    readonly target: readonly ['AppImage', 'deb']
+    readonly desktop: { readonly entry: { readonly StartupWMClass: string, readonly Keywords: string } }
+  }
+  readonly deb: { readonly packageName: string }
   readonly nsis: {
     readonly include: string
     readonly oneClick: false

@@ -1,12 +1,14 @@
-# DeepSeek Harness
+# DeepSeek Harness for Linux
 
 English | [中文](README.zh.md)
 
-DeepSeek Harness (`dsh`) is an open-source agent harness developed by [DeepSeek AI](https://deepseek.com).
+DeepSeek Harness for Linux is a community desktop port of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), the open-source agent harness (`dsh`) developed by [DeepSeek AI](https://deepseek.com). This independently maintained project adds Linux desktop packaging; it is not an official DeepSeek release.
+
+Start with the [Linux desktop guide](apps/desktop/README.md#linux-desktop) for prerequisites, development, AppImage and Debian packages, and manual updates. Report Linux port issues in [this repository](https://github.com/X2M7/deepseek-harness-linux/issues).
 
 It is built on an **everything-is-a-plugin** architecture and powered by [Cordis](https://github.com/cordiverse/cordis), whose design is described in [_A Programming Paradigm for Spatiotemporal Composability_](https://arxiv.org/abs/2608.25512).
 
-Documentation: [https://deepseek-harness.github.io/deepseek-harness/](https://deepseek-harness.github.io/deepseek-harness/)
+Upstream documentation: [https://deepseek-harness.github.io/deepseek-harness/](https://deepseek-harness.github.io/deepseek-harness/)
 
 ## Developer preview
 
@@ -16,7 +18,7 @@ Review the [safety notice](SAFETY.md) before running the project.
 
 ## Run
 
-### Run from `npm`
+### Run the upstream Web application from `npm`
 
 Install `Node.js`, then run:
 
@@ -28,21 +30,21 @@ The command starts the Web UI at `http://127.0.0.1:3080` by default and opens it
 
 ### Run from source
 
-To run from a repository checkout:
+To launch the Linux desktop application from this repository, first complete the prerequisites in the [Linux desktop guide](apps/desktop/README.md#linux-desktop):
 
 ```sh
-git clone https://github.com/deepseek-ai/deepseek-harness.git
-cd deepseek-harness
+git clone https://github.com/X2M7/deepseek-harness-linux.git
+cd deepseek-harness-linux
 pnpm install
-pnpm run build
-pnpm dsh web
+pnpm --dir apps/desktop exec install-electron
+pnpm run dev:desktop
 ```
 
-`pnpm run build` prepares the repository artifacts. `pnpm dsh web` uses those built artifacts without rebuilding.
+`pnpm run dev:desktop` builds the application before launching it. The desktop guide also covers packaging and reusing an existing build.
 
 ## Community and support
 
-- Submit feedback or bug reports through [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions).
+- Report Linux desktop issues in [this repository](https://github.com/X2M7/deepseek-harness-linux/issues); discuss the upstream harness through [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions).
 - Add the [`dsh-plugin`](https://github.com/topics/dsh-plugin) topic to your plugin repository for discoverability.
 - Join <a href="https://discord.gg/4MrtZUhpxg">DeepSeek Harness Discord community</a>.
 

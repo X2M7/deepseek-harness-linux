@@ -7,7 +7,11 @@ import type { DesktopUpdateState } from '../src/ipc.ts'
 import { DesktopUpdatePreparationError } from '../src/update-error.ts'
 import { zh } from '../src/locale.ts'
 
-vi.mock('electron', () => ({ app: { isPackaged: false } }))
+const app = vi.hoisted(() => ({ isPackaged: false }))
+vi.mock('electron', () => ({ app }))
+vi.mock('node:fs', async importOriginal => ({
+  ...await importOriginal<typeof import('node:fs')>(), existsSync: () => true,
+}))
 vi.mock('electron-updater', () => ({
   default: { autoUpdater: { autoDownload: true, autoInstallOnAppQuit: true } },
 }))
@@ -73,6 +77,24 @@ function fixture() {
 }
 
 describe('desktop update coordinator', () => {
+  it.each(['linux', 'darwin', 'win32'] as const)('contacts packaged update feeds only on supported platforms (%s)', async (platform) => {
+    vi.stubGlobal('process', { ...process, platform, resourcesPath: '/packaged/resources' })
+    app.isPackaged = true
+    try {
+      const f = fixture()
+      f.coordinator.dispose()
+      const coordinator = new DesktopUpdateCoordinator(state => state, f.beforeRestart, f.updater, undefined, () => '1.1.0-alpha.1')
+      coordinators.push(coordinator)
+      const result = await coordinator.check(true)
+      expect(f.checkForUpdates).toHaveBeenCalledTimes(platform === 'linux' ? 0 : 1)
+      expect(result.phase).toBe(platform === 'linux' ? 'error' : 'available')
+      expect(f.downloadUpdate).not.toHaveBeenCalled()
+    } finally {
+      app.isPackaged = false
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('keeps safe preparation diagnostics separate and clears them on an explicit retry', async () => {
     const f = fixture()
     await f.coordinator.check()

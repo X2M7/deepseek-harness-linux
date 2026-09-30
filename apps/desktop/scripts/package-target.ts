@@ -6,6 +6,7 @@ import { parseArgs } from 'node:util'
 import { join, resolve } from 'node:path'
 import {
   desktopBuildRecordFilename,
+  resolveDesktopAutoUpdateTarget,
   resolveDesktopAutoUpdateConfig,
 } from './desktop-auto-update-environment.mjs'
 import { desktopTargetBuildPaths } from './desktop-build-paths.mjs'
@@ -47,18 +48,24 @@ const DESKTOP_UPLOAD_CREDENTIAL_ENV_NAMES = new Set([
 const AUTOMATIC_BUILD_VERSION = 'auto'
 
 /** Fixed platform and architecture identifiers exposed by package scripts. */
-export type DesktopPackageTargetName = 'mac-arm64' | 'mac-x64' | 'win-x64'
+export type DesktopPackageTargetName = 'mac-arm64' | 'mac-x64' | 'win-x64' | 'linux-x64' | 'linux-arm64'
 
 /** One supported release target and its electron-builder selectors. */
 export interface DesktopPackageTarget {
   readonly name: DesktopPackageTargetName
-  readonly platform: 'darwin' | 'win32'
+  readonly platform: 'darwin' | 'win32' | 'linux'
   readonly arch: 'arm64' | 'x64'
-  readonly builderPlatform: '--mac' | '--win'
+  readonly builderPlatform: '--mac' | '--win' | '--linux'
   readonly builderArch: '--arm64' | '--x64'
 }
 
 const TARGETS: Record<DesktopPackageTargetName, DesktopPackageTarget> = {
+  'linux-x64': {
+    name: 'linux-x64', platform: 'linux', arch: 'x64', builderPlatform: '--linux', builderArch: '--x64',
+  },
+  'linux-arm64': {
+    name: 'linux-arm64', platform: 'linux', arch: 'arm64', builderPlatform: '--linux', builderArch: '--arm64',
+  },
   'mac-arm64': {
     name: 'mac-arm64',
     platform: 'darwin',
@@ -145,15 +152,15 @@ function writeReleaseRecord(
   }
   const buildVersion = resolveDesktopBuildVersion(environment, dshVersion)
   const packaged = resolveDesktopBuildCommit(environment)
-  const update = resolveDesktopAutoUpdateConfig(environment, target.platform, target.arch)
-  const recordPath = join(artifactsRoot, desktopBuildRecordFilename(target.name))
+  const update = target.platform === 'linux' ? undefined : resolveDesktopAutoUpdateConfig(environment, target.platform, target.arch)
+  const recordPath = join(artifactsRoot, target.platform === 'linux' ? `${target.name}-release.json` : desktopBuildRecordFilename(resolveDesktopAutoUpdateTarget(target.platform, target.arch)))
   const temporaryPath = `${recordPath}.tmp`
   writeFileSync(temporaryPath, `${JSON.stringify({
     schemaVersion: 1,
     target: target.name,
     version: buildVersion,
-    environment: update.environment,
-    publicUrl: update.publicUrl,
+    environment: update?.environment ?? 'community',
+    ...(update === undefined ? {} : { publicUrl: update.publicUrl }),
     // Upload reads this to tag the commit a production release was packaged from.
     ...packaged === undefined ? {} : { commit: packaged.commit, dirty: packaged.dirty },
   }, null, 2)}\n`)
@@ -176,6 +183,9 @@ export function resolveDesktopPackageTarget(
     throw new Error(`desktop package: unsupported target ${JSON.stringify(name)}; expected ${Object.keys(TARGETS).join(', ')}`)
   }
   const target = TARGETS[name]
+  if (target.platform === 'linux' && (hostPlatform !== 'linux' || hostArch !== target.arch)) {
+    throw new Error(`desktop package: ${name} requires a Linux ${target.arch} build host`)
+  }
   if (target.platform === 'win32' && (hostPlatform !== 'win32' || hostArch !== 'x64')) {
     throw new Error('desktop package: win-x64 requires a Windows x64 build host')
   }
@@ -321,9 +331,10 @@ async function resolveRequestedBuildVersion(
   const requested = invocation.requestedBuildVersion
   if (requested === undefined) return productVersion
   if (requested !== AUTOMATIC_BUILD_VERSION) return validateDesktopBuildVersion(requested, productVersion)
+  if (invocation.target.platform === 'linux') throw new Error('desktop package: Linux builds require an explicit --build-version; automatic numbering belongs to the upstream update service')
   const paths = desktopTargetBuildPaths(invocation.target.name)
   return suggestDesktopBuildVersion({
-    productVersion, target: invocation.target.name, environment,
+    productVersion, target: resolveDesktopAutoUpdateTarget(invocation.target.platform, invocation.target.arch), environment,
     // Unsigned builds land beside the signed output, so numbering has to read the directory this run writes.
     artifactsRoot: invocation.unsigned ? paths.unsignedArtifacts : paths.artifacts,
   })
@@ -369,7 +380,7 @@ async function main(): Promise<void> {
       await packagingStep(run.directory, 'macos-package', () => withMacOSSigningKeychain(environment,
         signingEnvironment => packageTarget(invocation, signingEnvironment, run)), secrets)
     } else {
-      await packagingStep(run.directory, 'windows-package', () => packageTarget(invocation, environment, run), secrets)
+      await packagingStep(run.directory, `${target.platform}-package`, () => packageTarget(invocation, environment, run), secrets)
     }
     success = true
   } catch (error) {
@@ -402,7 +413,7 @@ export async function packageTarget(
   const mac = target.platform === 'darwin' ? resolveMacOSPackageSettings(environment) : undefined
   const packArguments = mac === undefined ? [] : ['--concurrency', String(mac.packConcurrency)]
   const buildPaths = desktopTargetBuildPaths(target.name)
-  const releaseRecordPath = join(buildPaths.artifacts, desktopBuildRecordFilename(target.name))
+  const releaseRecordPath = join(buildPaths.artifacts, target.platform === 'linux' ? `${target.name}-release.json` : desktopBuildRecordFilename(resolveDesktopAutoUpdateTarget(target.platform, target.arch)))
   if (!invocation.prepareOnly && !invocation.unsigned) {
     rmSync(releaseRecordPath, { force: true })
     rmSync(`${releaseRecordPath}.tmp`, { force: true })
@@ -460,13 +471,14 @@ export async function packageTarget(
   rmSync(buildPaths.packedLandlock, { recursive: true, force: true })
   mkdirSync(buildPaths.packedLandlock, { recursive: true })
   await execute(['--dir', 'native/system', 'run', 'build:ts'], buildEnv, REPOSITORY_ROOT)
-  await execute([
-    '--dir',
-    'native/system/packages/entry',
-    'pack',
-    '--pack-destination',
-    buildPaths.packedLandlock,
-  ], buildEnv, REPOSITORY_ROOT)
+  if (target.platform === 'linux') {
+    await execute(['--dir', 'native/system', 'run', 'build:native'], buildEnv, REPOSITORY_ROOT)
+    await execute(['--dir', 'native/system', 'run', 'release:pack', buildPaths.packedLandlock, '--current-platform-only'], buildEnv, REPOSITORY_ROOT)
+  } else {
+    await execute([
+      '--dir', 'native/system/packages/entry', 'pack', '--pack-destination', buildPaths.packedLandlock,
+    ], buildEnv, REPOSITORY_ROOT)
+  }
   await execute(['run', 'prepare:runtime', ...(signPrimaryRuntime ? ['--defer-primary-runtime-smoke'] : [])], downloadEnv)
   if (signPrimaryRuntime) await execute(['run', 'sign:primary-runtime'], electronBuilderEnv)
   await execute(['run', 'prepare:packages'], targetEnv)

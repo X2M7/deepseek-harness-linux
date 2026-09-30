@@ -1,12 +1,14 @@
-# DeepSeek Harness
+# DeepSeek Harness for Linux
 
 [English](README.md) | 中文
 
-DeepSeek Harness（`dsh`）是由 [DeepSeek AI](https://deepseek.com) 开发的开源 agent harness（智能体框架）。
+DeepSeek Harness for Linux 是 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的社区桌面移植版，上游是由 [DeepSeek AI](https://deepseek.com) 开发的开源 agent harness（智能体框架，`dsh`）。本项目独立维护 Linux 桌面打包支持，并非 DeepSeek 官方发行版。
+
+请先阅读 [Linux 桌面指南](apps/desktop/README.zh.md#linux-desktop)，了解环境要求、开发、AppImage 与 Debian 安装包及手动更新。Linux 移植版的问题请提交至[本仓库](https://github.com/X2M7/deepseek-harness-linux/issues)。
 
 它构建于**一切皆插件**的架构之上，由 [Cordis](https://github.com/cordiverse/cordis) 驱动，其设计参见论文 [_A Programming Paradigm for Spatiotemporal Composability_](https://arxiv.org/abs/2608.25512)。
 
-文档：[https://deepseek-harness.github.io/deepseek-harness/](https://deepseek-harness.github.io/deepseek-harness/)
+上游文档：[https://deepseek-harness.github.io/deepseek-harness/](https://deepseek-harness.github.io/deepseek-harness/)
 
 ## 开发者预览
 
@@ -18,7 +20,7 @@ DeepSeek Harness 处于 _开发者预览_ 阶段，正在快速迭代。**未来
 
 ## 运行
 
-### 通过 `npm` 运行
+### 通过 `npm` 运行上游 Web 应用
 
 安装 `Node.js`，然后运行：
 
@@ -32,21 +34,21 @@ npx @deepseek-ai/dsh web
 
 ### 从源码运行
 
-如需从仓库源码运行：
+如需从本仓库启动 Linux 桌面应用，请先完成 [Linux 桌面指南](apps/desktop/README.zh.md#linux-desktop)中的环境准备：
 
 ```sh
-git clone https://github.com/deepseek-ai/deepseek-harness.git
-cd deepseek-harness
+git clone https://github.com/X2M7/deepseek-harness-linux.git
+cd deepseek-harness-linux
 pnpm install
-pnpm run build
-pnpm dsh web
+pnpm --dir apps/desktop exec install-electron
+pnpm run dev:desktop
 ```
 
-`pnpm run build` 会准备仓库产物。`pnpm dsh web` 会直接使用这些已构建产物，不会重新构建。
+`pnpm run dev:desktop` 会先构建再启动应用。桌面指南同时说明如何打包和复用已有构建。
 
 ## 社区与支持
 
-- 通过 [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions) 提交反馈或 bug 报告。
+- Linux 桌面版问题请提交至[本仓库](https://github.com/X2M7/deepseek-harness-linux/issues)；上游框架相关讨论请使用 [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions)。
 - 为你的插件仓库添加 [`dsh-plugin`](https://github.com/topics/dsh-plugin) 话题，便于被发现。
 - 欢迎加入 DeepSeek Harness 企微群！扫描下方二维码填写入群问卷，小助手会定期发送入群邀请。
 

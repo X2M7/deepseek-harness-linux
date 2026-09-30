@@ -104,11 +104,15 @@ async function main(): Promise<void> {
   }
   const version = packageVersion(join(APP_ROOT, 'package.json'), 'desktop package')
   const pnpmVersion = packageVersion(join(APP_ROOT, 'node_modules', 'pnpm', 'package.json'), 'pnpm package')
+  await preparePrimaryRuntime()
+  const executable = process.platform === 'linux'
+    ? join(process.env.DSH_DESKTOP_PRIMARY_RUNTIME_DIR ?? developmentRuntimeDirectory(), 'dependencies', 'node', 'bin', 'node')
+    : createRequire(import.meta.url)('electron') as string
   const release: DesktopRelease = {
     schemaVersion: 1,
     version,
     hostProtocolVersion: DESKTOP_HOST_PROTOCOL_VERSION,
-    nodeVersion: execFileSync(createRequire(import.meta.url)('electron') as string, ['-p', 'process.versions.node'],
+    nodeVersion: execFileSync(executable, ['-p', 'process.versions.node'],
       { encoding: 'utf8', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } }).trim(),
     pnpmVersion,
   }
@@ -120,7 +124,10 @@ async function main(): Promise<void> {
     release,
     target: resolveDesktopBuildTarget(),
   })
-  await preparePrimaryRuntime()
+  if (process.platform === 'linux'
+    && !existsSync(join(REPOSITORY_ROOT, 'native', 'system', 'packages', `linux-${process.arch}`, 'bin', 'landlock-run'))) {
+    await runPackageScript('build:native', join(REPOSITORY_ROOT, 'native', 'system'))
+  }
   await launchElectron()
 }
 

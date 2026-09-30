@@ -50,11 +50,12 @@ export function createElectronBuilderConfig(
   preparedRuntime = undefined,
   preparedRuntimeVersion = undefined,
 ) {
-  const appId = resolveDesktopAppId(env)
-  const policy = resolveDesktopPolicyEnvironment(env)
   const targetPlatform = env.DSH_DESKTOP_TARGET_PLATFORM
   const resolvedPlatform = targetPlatform ?? hostPlatform
   const resolvedArch = env.DSH_DESKTOP_TARGET_ARCH ?? hostArch
+  const packagesLinux = resolvedPlatform === 'linux'
+  const appId = resolveDesktopAppId(packagesLinux ? { ...env, DSH_DESKTOP_APP_ID: 'net.xumin.deepseek-harness-linux' } : env)
+  const policy = packagesLinux ? undefined : resolveDesktopPolicyEnvironment(env)
   if (env.DSH_DESKTOP_UNSIGNED !== undefined && !['0', '1'].includes(env.DSH_DESKTOP_UNSIGNED)) {
     throw new Error('desktop package: DSH_DESKTOP_UNSIGNED must be 0 or 1')
   }
@@ -90,7 +91,7 @@ export function createElectronBuilderConfig(
   if (windowsSigner !== undefined) {
     installWindowsNsisBootstrapSigner({ sign: windowsSigner })
   }
-  const update = unsigned ? undefined : resolveDesktopAutoUpdateConfig(env, resolvedPlatform, resolvedArch)
+  const update = unsigned || packagesLinux ? undefined : resolveDesktopAutoUpdateConfig(env, resolvedPlatform, resolvedArch)
   if (preparedRuntime !== undefined) buildPaths.dsh = preparedRuntime
   // electron-builder merges extraMetadata into the packaged manifest, so a build version here reaches
   // the artifact names, the update feed, and the installed app.getVersion() the updater compares against.
@@ -102,11 +103,13 @@ export function createElectronBuilderConfig(
     protocols: [{ name: 'DeepSeek Harness', schemes: ['dsh'] }],
     extraMetadata: {
       dshDesktopAppId: appId,
-      dshMandatoryUpdatePolicy: policy,
+      ...(policy === undefined ? {} : { dshMandatoryUpdatePolicy: policy }),
+      ...(packagesLinux ? { desktopName: 'deepseek-harness-linux.desktop', homepage: 'https://github.com/X2M7/deepseek-harness-linux',
+        author: { name: 'Xumin Liang', email: 'liang@xumin.net' } } : {}),
       ...buildVersion === productVersion ? {} : { version: buildVersion },
       ...packaged === undefined ? {} : { dshBuildCommit: packaged.commit, dshBuildDirty: packaged.dirty },
     },
-    productName: 'DeepSeek Harness',
+    productName: packagesLinux ? 'DeepSeek Harness Linux' : 'DeepSeek Harness',
     // Unsigned builds carry their own suffix so a shared file can never pass for a release artifact.
     artifactName: `deepseek-harness-\${version}-\${os}-\${arch}${unsigned ? '-unsigned' : ''}.\${ext}`,
     directories: { output: unsigned ? buildPaths.unsignedArtifacts : buildPaths.artifacts },
@@ -136,14 +139,22 @@ export function createElectronBuilderConfig(
       'lib/preload-welcome.cjs',
       'renderer/**/*',
       'package.json',
-      { from: buildPaths.dsh, to: 'dsh', filter: ['**/*'] },
-      // electron-builder excludes a source directory's root node_modules.
-      { from: join(buildPaths.dsh, 'node_modules'), to: 'dsh/node_modules', filter: ['**/*'] },
+      ...(packagesLinux ? [] : [
+        { from: buildPaths.dsh, to: 'dsh', filter: ['**/*'] },
+        // electron-builder excludes a source directory's root node_modules.
+        { from: join(buildPaths.dsh, 'node_modules'), to: 'dsh/node_modules', filter: ['**/*'] },
+      ]),
     ],
     asarUnpack: unpack,
     extraResources: [
       { from: buildPaths.runtime, to: 'runtime' },
       { from: fileURLToPath(new URL('../resources/icon-windows.png', import.meta.url)), to: 'icon.png' },
+      // Linux Host uses the bundled standard Node to avoid Electron's GLib symbol conflicts with libvips.
+      ...(packagesLinux ? [
+        { from: buildPaths.dsh, to: 'dsh', filter: ['**/*'] },
+        // extraResources uses the same root node_modules exclusion as application files.
+        { from: join(buildPaths.dsh, 'node_modules'), to: 'dsh/node_modules', filter: ['**/*'] },
+      ] : []),
       // Windows tray bitmaps; macOS keeps the Dock and ships no menu bar icon.
       ...(packagesWindows ? [{ from: fileURLToPath(new URL('../resources/tray-windows.ico', import.meta.url)), to: 'tray.ico' }] : []),
     ],
@@ -168,10 +179,12 @@ export function createElectronBuilderConfig(
       writeUpdateInfo: false,
     },
     beforePack: async context => {
-      const office = await officePackageDirectories(buildPaths.dsh, { platform: resolvedPlatform, arch: resolvedArch })
-      const patterns = office.map(directory => `**/${relative(buildPaths.dsh, directory).split(sep).join('/')}/**/*`)
-      const existing = context.packager.config.asarUnpack ?? []
-      context.packager.config.asarUnpack = [...(typeof existing === 'string' ? [existing] : existing), ...patterns]
+      if (!packagesLinux) {
+        const office = await officePackageDirectories(buildPaths.dsh, { platform: resolvedPlatform, arch: resolvedArch })
+        const patterns = office.map(directory => `**/${relative(buildPaths.dsh, directory).split(sep).join('/')}/**/*`)
+        const existing = context.packager.config.asarUnpack ?? []
+        context.packager.config.asarUnpack = [...(typeof existing === 'string' ? [existing] : existing), ...patterns]
+      }
       if (packagesWindows) windowsCode = await prepareWindowsAsarUnpack(context, buildPaths.dsh)
       if (windowsSigner !== undefined) {
         primaryRuntimeDestination = join(context.appOutDir, 'resources', 'runtime', 'primary-runtime')
@@ -190,7 +203,7 @@ export function createElectronBuilderConfig(
       }
       // The bundled runtime declares whichever version prepared it: the product version for an ordinary
       // release, and a rewritten one for installed-update qualification.
-      await verifyDesktopRuntime(buildPaths.dsh,
+      await verifyDesktopRuntime(packagesLinux ? join(resourcesDir, 'dsh') : buildPaths.dsh,
         preparedRuntimeVersion ?? productVersion, { platform: resolvedPlatform, arch: resolvedArch })
       // Unsigned Windows builds skip electron-builder's afterSign hook.
       if (packagesWindows && unsigned) await verifyWindowsAsarUnpack(buildPaths.dsh, resourcesDir, windowsCode)
@@ -231,9 +244,17 @@ export function createElectronBuilderConfig(
       target: ['nsis'],
     },
     linux: {
+      executableName: 'deepseek-harness-linux',
+      // electron-builder's legacy AppImage tool otherwise injects --no-sandbox.
+      executableArgs: [],
+      syncDesktopName: true,
+      icon: fileURLToPath(new URL('../resources/icon.png', import.meta.url)),
       category: 'Development',
-      target: ['AppImage'],
+      synopsis: 'Plugin-based coding agent for Linux desktops',
+      target: ['AppImage', 'deb'],
+      desktop: { entry: { StartupWMClass: 'deepseek-harness-linux', Keywords: 'AI;Development;DeepSeek;' } },
     },
+    deb: { packageName: 'deepseek-harness-linux' },
     nsis: {
       installerSidebar: join(buildPaths.root, 'installer-ui', 'uninstaller-sidebar.bmp'),
       uninstallerSidebar: join(buildPaths.root, 'installer-ui', 'uninstaller-sidebar.bmp'),

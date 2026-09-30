@@ -196,6 +196,7 @@ const harness = await vi.hoisted(async () => {
     menu, popup, socketHeaders: vi.fn(), loginShell, readLoginShell, updateCheck, updateDownload, updateInstall,
     platformDispose,
     platformCloseAndWait,
+    platformIdentity: vi.fn(),
 
     get analyticsEnabled() { return analyticsEnabled },
     set analyticsEnabled(value: boolean) { analyticsEnabled = value; analyticsEnabledListener?.(value) },
@@ -352,6 +353,9 @@ vi.mock('../src/update-coordinator.ts', () => ({ DesktopUpdateCoordinator: class
 vi.mock('../src/platform-view.ts', async importOriginal => ({
   ...await importOriginal<typeof import('../src/platform-view.ts')>(),
   DesktopPlatformView: class {
+    constructor(_preload: string, _getLocale: () => string, platform: 'darwin' | 'win32' | null) {
+      harness.platformIdentity(platform)
+    }
     notifyLocaleChanged() {}
     setSession() {}
     setBounds() {}
@@ -883,7 +887,7 @@ describe('desktop main startup', () => {
     const application = template[0]!.submenu as MenuItemConstructorOptions[]
     expect(application.filter(item => item.visible !== false).map(describeItem)).toEqual(platform === 'darwin'
       ? ['about', 'separator', en.checkUpdatesMenu, en.cliCommandMenu, 'separator', 'hide', 'hideOthers', 'unhide', 'separator', 'quit']
-      : ['about', 'separator', en.checkUpdatesMenu, 'separator', 'quit'])
+      : ['about', 'separator', 'quit'])
     expect(harness.menu.setApplicationMenu).toHaveBeenCalledOnce()
   })
 
@@ -1103,6 +1107,35 @@ describe('desktop main startup', () => {
     await Promise.resolve(invoke(DESKTOP_IPC.boot))
     return host
   }
+
+  it('closes the Linux workspace through task confirmation and awaits Host exit', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'linux' })
+    harness.closeWindowsOnQuit = true
+    const host = await readyWorkspace()
+    const window = harness.windows[0]!
+    expect(harness.trays).toHaveLength(0)
+    expect(harness.platformIdentity).toHaveBeenCalledExactlyOnceWith(null)
+    expect(window.options).toMatchObject({ webPreferences: { sandbox: true, contextIsolation: true } })
+    host.inspectQuit.mockResolvedValue({ activeTasks: true, scheduledTasks: false })
+    harness.dialog.showMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false })
+    window.close()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(harness.dialog.showMessageBox).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      message: en.quitTitle, detail: en.quitActiveTasks,
+    }))
+    expect(window.isDestroyed()).toBe(false)
+    expect(window.hide).not.toHaveBeenCalled()
+    expect(host.stop).not.toHaveBeenCalled()
+    harness.dialog.showMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false })
+    window.close()
+    await host.stopping.promise
+    expect(window.hide).toHaveBeenCalledOnce()
+    expect(window.isDestroyed()).toBe(false)
+    host.exited.resolve()
+    await harness.quitCompleted.promise
+    expect(window.isDestroyed()).toBe(true)
+    expect(harness.platformDispose).toHaveBeenCalledOnce()
+  })
 
   it('hides the workspace before intentional Host shutdown can look like reconnection', async () => {
     const host = await readyWorkspace()
@@ -2120,6 +2153,31 @@ describe('desktop main startup', () => {
     expect(harness.hosts[0]).toMatchObject({ node: process.execPath, runtime: project,
       primaryRuntime: 'test-primary-runtime', profile: 'desktop-test-profile' })
     expect(harness.applyRelease).toHaveBeenCalledOnce()
+    harness.hosts[0]!.ready.resolve()
+    await harness.navigated.promise
+    expect(harness.dialog.showErrorBox).not.toHaveBeenCalled()
+  })
+
+  it.each([true, false])('runs the Linux Host with standalone Node and a physical package tree (packaged=%s)', async (packaged) => {
+    vi.stubGlobal('process', { ...process, platform: 'linux' })
+    harness.app.isPackaged = packaged
+    vi.stubEnv('DSH_DESKTOP_DSH_DIR', undefined)
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    harness.prepared.resolve()
+    await harness.hostStarted.promise
+    const primaryRuntime = packaged ? join('desktop-test-resources', 'runtime', 'primary-runtime') : 'test-primary-runtime'
+    expect(harness.hosts[0]).toMatchObject({
+      node: join(primaryRuntime, 'dependencies', 'node', 'bin', 'node'),
+      runtime: packaged ? join('desktop-test-resources', 'dsh')
+        : join(harness.app.getAppPath(), '.desktop-build', 'development', 'project'),
+      primaryRuntime,
+      packageManager: {
+        pnpm: packaged ? join('desktop-test-resources', 'runtime', 'pnpm', 'bin', 'pnpm.mjs') : 'test-pnpm',
+        nodeBin: packaged ? join('desktop-test-resources', 'runtime', 'bin') : join(harness.app.getAppPath(), 'scripts', 'node-bin'),
+      },
+    })
+    expect(harness.hosts[0]!.node).not.toBe(process.execPath)
     harness.hosts[0]!.ready.resolve()
     await harness.navigated.promise
     expect(harness.dialog.showErrorBox).not.toHaveBeenCalled()
