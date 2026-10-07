@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       package:
-        description: Build AppImage and Debian artifacts after validation
+        description: Build AppImage, Debian, and RPM artifacts after validation
         type: boolean
         default: false
       architecture:
@@ -21,7 +21,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: linux-desktop-${{ github.ref }}-${{ github.event_name }}
+  group: linux-desktop-${{ github.ref }}-${{ github.event_name }}${{ github.event_name == 'workflow_dispatch' && format('-{0}', inputs.architecture) || '' }}
   cancel-in-progress: true
 
 env:
@@ -104,5 +104,6 @@ jobs:
           path: |
             apps/desktop/.desktop-build/targets/linux-${{ inputs.architecture }}/artifacts/*.AppImage
             apps/desktop/.desktop-build/targets/linux-${{ inputs.architecture }}/artifacts/*.deb
+            apps/desktop/.desktop-build/targets/linux-${{ inputs.architecture }}/artifacts/*.rpm
           if-no-files-found: error
           retention-days: 14

@@ -6,7 +6,7 @@ English | [中文](README.zh.md)
 
 ## Linux desktop
 
-This community port packages the upstream Electron desktop application for Linux x64 and arm64 as AppImage and Debian (`.deb`) artifacts. It retains the shared Web interface, local Host, plugins, sessions, and bundled runtimes. Linux release artifacts belong to [X2M7/deepseek-harness-linux](https://github.com/X2M7/deepseek-harness-linux/releases), independently of DeepSeek's macOS and Windows releases.
+This community port packages the upstream Electron desktop application for Linux x64 and arm64 as AppImage, Debian (`.deb`), and RPM (`.rpm`) artifacts. It retains the shared Web interface, local Host, plugins, sessions, and bundled runtimes. Linux release artifacts belong to [X2M7/deepseek-harness-linux](https://github.com/X2M7/deepseek-harness-linux/releases), independently of DeepSeek's macOS and Windows releases.
 
 ### Build and run
 
@@ -26,7 +26,7 @@ Enter a DeepSeek API key in the welcome window, or configure the model from Sett
 
 Choose the command matching the build host:
 
-| Host | AppImage and Debian packages | Unpacked application directory |
+| Host | AppImage, Debian, and RPM packages | Unpacked application directory |
 |---|---|---|
 | Linux x64 | `pnpm run package:desktop:linux:x64` | `pnpm run package:desktop:linux:x64:dir` |
 | Linux arm64 | `pnpm run package:desktop:linux:arm64` | `pnpm run package:desktop:linux:arm64:dir` |
@@ -37,7 +37,7 @@ The [Desktop Host reference](../desktop-host/README.md) describes packaged nativ
 
 ### Install and use
 
-Install the `.deb` through the distribution's package installer, or make the AppImage executable and launch it from your file manager. AppImage mounting requires the distribution's FUSE 2 compatibility library; if that integration is unavailable, run the unpacked application directory. Debian-based distributions can also install the Debian package. Keep Chromium sandboxing enabled and run as a regular user. The AppImage launcher does not automatically disable sandboxing when namespace setup fails. Resolve sandbox or user-namespace errors through the distribution's supported configuration rather than adding `--no-sandbox`.
+Install the `.deb` on a Debian-based distribution or the `.rpm` on an RPM-based distribution through its package installer, or make the AppImage executable and launch it from your file manager. AppImage mounting requires the distribution's FUSE 2 compatibility library; if that integration is unavailable, run the unpacked application directory. Keep Chromium sandboxing enabled and run as a regular user. The AppImage launcher does not automatically disable sandboxing when namespace setup fails. Resolve sandbox or user-namespace errors through the distribution's supported configuration rather than adding `--no-sandbox`.
 
 Linux uses native window decorations. Closing the main window quits the application; the normal task-interruption confirmation remains active, so cancelling keeps the window and its tasks open. Minimize keeps the application running. The Linux port has no tray-dependent background-close behavior or Desktop-managed terminal-command installation.
 
@@ -49,7 +49,7 @@ Updates are manual: quit the application, then install the newer package or repl
 
 ### Continuous integration
 
-The [Linux desktop workflow](../../.github/workflows/linux-desktop.yml) runs focused desktop checks and a build on pull requests and pushes to `main`, using standard GitHub-hosted Ubuntu runners. Its manual dispatch can additionally package one selected architecture and retain the results as workflow artifacts. Downloading a workflow artifact does not create a GitHub release; publication remains a separate maintainer action. Native arm64 packaging uses an arm64 runner. The arm64 target is configured but has not been validated on an arm64 machine.
+The [Linux desktop workflow](../../.github/workflows/linux-desktop.yml) runs focused desktop checks and a build on pull requests and pushes to `main`, using standard GitHub-hosted Ubuntu runners. Its manual dispatch can additionally package AppImage, Debian, and RPM artifacts for one selected architecture and retain the results as workflow artifacts. The x64 and arm64 manual runs can proceed concurrently. Downloading a workflow artifact does not create a GitHub release; publication remains a separate maintainer action. Native arm64 packaging uses an arm64 runner. The arm64 package has not yet been tested interactively on an arm64 graphical desktop.
 
 Inherited upstream CI, release, and review workflows restrict their jobs to `deepseek-ai/deepseek-harness`. This repository uses the Linux desktop workflow and does not request upstream runners or release secrets.
 

@@ -6,7 +6,7 @@
 
 ## Linux 桌面版
 
-本社区移植版将上游 Electron 桌面应用打包为适用于 Linux x64 和 arm64 的 AppImage 与 Debian（`.deb`）产物，保留共享 Web 界面、本地 Host、插件、会话及内置运行时。Linux 发布产物属于 [X2M7/deepseek-harness-linux](https://github.com/X2M7/deepseek-harness-linux/releases)，独立于 DeepSeek 的 macOS 和 Windows 发行版。
+本社区移植版将上游 Electron 桌面应用打包为适用于 Linux x64 和 arm64 的 AppImage、Debian（`.deb`）和 RPM（`.rpm`）产物，保留共享 Web 界面、本地 Host、插件、会话及内置运行时。Linux 发布产物属于 [X2M7/deepseek-harness-linux](https://github.com/X2M7/deepseek-harness-linux/releases)，独立于 DeepSeek 的 macOS 和 Windows 发行版。
 
 ### 构建与运行
 
@@ -26,7 +26,7 @@ pnpm run dev:desktop
 
 请选择与构建主机匹配的命令：
 
-| 主机 | AppImage 与 Debian 安装包 | 未封装的应用目录 |
+| 主机 | AppImage、Debian 与 RPM 安装包 | 未封装的应用目录 |
 |---|---|---|
 | Linux x64 | `pnpm run package:desktop:linux:x64` | `pnpm run package:desktop:linux:x64:dir` |
 | Linux arm64 | `pnpm run package:desktop:linux:arm64` | `pnpm run package:desktop:linux:arm64:dir` |
@@ -37,7 +37,7 @@ pnpm run dev:desktop
 
 ### 安装与使用
 
-通过发行版的软件包安装器安装 `.deb`，或为 AppImage 添加可执行权限后从文件管理器启动。挂载 AppImage 需要发行版的 FUSE 2 兼容库；若无法使用该集成，可运行未封装的应用目录；Debian 系发行版也可安装 Debian 软件包。请保持 Chromium 沙箱启用，并以普通用户运行。AppImage 启动器在命名空间初始化失败时不会自动禁用沙箱。遇到沙箱或用户命名空间错误时，应按发行版支持的方式修复配置，而不是添加 `--no-sandbox`。
+在 Debian 系发行版上通过软件包安装器安装 `.deb`，在 RPM 系发行版上安装 `.rpm`，或为 AppImage 添加可执行权限后从文件管理器启动。挂载 AppImage 需要发行版的 FUSE 2 兼容库；若无法使用该集成，可运行未封装的应用目录。请保持 Chromium 沙箱启用，并以普通用户运行。AppImage 启动器在命名空间初始化失败时不会自动禁用沙箱。遇到沙箱或用户命名空间错误时，应按发行版支持的方式修复配置，而不是添加 `--no-sandbox`。
 
 Linux 使用原生窗口装饰。关闭主窗口会退出应用，正常的任务中断确认仍然生效，因此取消退出会保留窗口及任务。最小化会让应用继续运行。Linux 移植版不提供依赖托盘的关闭后后台驻留，也不提供由 Desktop 管理的终端命令安装。
 
@@ -49,7 +49,7 @@ Linux 使用锁定的标准 Node.js 可执行文件 `resources/runtime/primary-r
 
 ### 持续集成
 
-[Linux 桌面工作流](../../.github/workflows/linux-desktop.yml)在 PR 和推送至 `main` 时使用标准 GitHub 托管 Ubuntu runner 运行聚焦桌面检查与构建。手动触发时，还可以为选定的架构打包，并将结果保留为工作流产物。下载工作流产物不会创建 GitHub release；发布仍是独立的维护者操作。原生 arm64 打包使用 arm64 runner。arm64 目标已配置，但尚未在 arm64 机器上完成验收。
+[Linux 桌面工作流](../../.github/workflows/linux-desktop.yml)在 PR 和推送至 `main` 时使用标准 GitHub 托管 Ubuntu runner 运行聚焦桌面检查与构建。手动触发时，还可以为选定的架构打包 AppImage、Debian 与 RPM 产物，并将结果保留为工作流产物。x64 与 arm64 手动任务可以同时进行。下载工作流产物不会创建 GitHub release；发布仍是独立的维护者操作。原生 arm64 打包使用 arm64 runner。arm64 产物尚未在 arm64 图形桌面上完成交互验收。
 
 继承的上游 CI、发布和审查工作流仅允许在 `deepseek-ai/deepseek-harness` 仓库执行任务。本仓库使用 Linux 桌面工作流，不会请求上游 runner 或发布凭据。
 

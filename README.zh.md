@@ -4,7 +4,7 @@
 
 DeepSeek Harness for Linux 是 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的社区桌面移植版，上游是由 [DeepSeek AI](https://deepseek.com) 开发的开源 agent harness（智能体框架，`dsh`）。本项目独立维护 Linux 桌面打包支持，并非 DeepSeek 官方发行版。
 
-请先阅读 [Linux 桌面指南](apps/desktop/README.zh.md#linux-desktop)，了解环境要求、开发、AppImage 与 Debian 安装包及手动更新。Linux 移植版的问题请提交至[本仓库](https://github.com/X2M7/deepseek-harness-linux/issues)。
+请先阅读 [Linux 桌面指南](apps/desktop/README.zh.md#linux-desktop)，了解环境要求、开发、AppImage、Debian 与 RPM 安装包及手动更新。Linux 移植版的问题请提交至[本仓库](https://github.com/X2M7/deepseek-harness-linux/issues)。
 
 它构建于**一切皆插件**的架构之上，由 [Cordis](https://github.com/cordiverse/cordis) 驱动，其设计参见论文 [_A Programming Paradigm for Spatiotemporal Composability_](https://arxiv.org/abs/2608.25512)。
 

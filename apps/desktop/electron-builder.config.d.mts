@@ -46,10 +46,11 @@ export interface DesktopElectronBuilderConfig {
     readonly icon: string
     readonly category: string
     readonly synopsis: string
-    readonly target: readonly ['AppImage', 'deb']
+    readonly target: readonly ['AppImage', 'deb', 'rpm']
     readonly desktop: { readonly entry: { readonly StartupWMClass: string, readonly Keywords: string } }
   }
   readonly deb: { readonly packageName: string }
+  readonly rpm: { readonly packageName: string }
   readonly nsis: {
     readonly include: string
     readonly oneClick: false

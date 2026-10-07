@@ -40,7 +40,7 @@ describe('community Linux packaging', () => {
     expect(config.productName).toBe('DeepSeek Harness Linux')
     expect(config.publish).toBeNull()
     expect(config.extraMetadata).not.toHaveProperty('dshMandatoryUpdatePolicy')
-    expect(config.linux).toMatchObject({ executableName: 'deepseek-harness-linux', target: ['AppImage', 'deb'] })
+    expect(config.linux).toMatchObject({ executableName: 'deepseek-harness-linux', target: ['AppImage', 'deb', 'rpm'] })
     expect(config.linux.executableArgs).toEqual([])
     expect(config.directories.output).toContain(`linux-${arch}`)
     expect(config.electronDist).toContain(`linux-${arch}`)
@@ -53,6 +53,7 @@ describe('community Linux packaging', () => {
     expect(config.extraMetadata.desktopName).toBe(`${config.linux.desktop.entry.StartupWMClass}.desktop`)
     expect(config.linux.syncDesktopName).toBe(true)
     expect(config.deb.packageName).toBe(config.linux.executableName)
+    expect(config.rpm.packageName).toBe(config.linux.executableName)
   }, 20_000)
 
   // Linux native launchers require POSIX executable permissions, which Windows cannot preserve.

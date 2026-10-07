@@ -251,10 +251,11 @@ export function createElectronBuilderConfig(
       icon: fileURLToPath(new URL('../resources/icon.png', import.meta.url)),
       category: 'Development',
       synopsis: 'Plugin-based coding agent for Linux desktops',
-      target: ['AppImage', 'deb'],
+      target: ['AppImage', 'deb', 'rpm'],
       desktop: { entry: { StartupWMClass: 'deepseek-harness-linux', Keywords: 'AI;Development;DeepSeek;' } },
     },
     deb: { packageName: 'deepseek-harness-linux' },
+    rpm: { packageName: 'deepseek-harness-linux' },
     nsis: {
       installerSidebar: join(buildPaths.root, 'installer-ui', 'uninstaller-sidebar.bmp'),
       uninstallerSidebar: join(buildPaths.root, 'installer-ui', 'uninstaller-sidebar.bmp'),
