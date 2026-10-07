@@ -60,6 +60,7 @@ jobs:
           apps/desktop/tests/cli-launcher.spec.ts
           apps/desktop/tests/runtime-file-policy.spec.ts
           apps/desktop/tests/development-project.spec.ts
+          apps/desktop/tests/development-launcher.spec.ts
           apps/desktop/tests/main-startup.spec.ts
           apps/desktop/tests/platform-view.spec.ts
           apps/desktop/tests/update-coordinator.spec.ts

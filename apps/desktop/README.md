@@ -209,6 +209,8 @@ After an explicit build, `start:desktop` reconstructs the disposable project and
 pnpm run start:desktop
 ```
 
+`dev:desktop` supports the first build from a fresh checkout; `start:desktop` requires existing build artifacts and reports the missing path when one is absent.
+
 The Web counterparts are `pnpm run dev:web` and `pnpm run start:web`, documented in the [development guide](../../docs/development.md). Workspace development runs the current CLI and private Desktop Host packages under bundled standard Node.js on Linux or Electron RunAsNode on macOS and Windows. Plugin management and recovery use `$DSH_HOME/profiles/desktop`, separate from the disposable workspace runtime. The Host uses runtime module resolution in both development and packaged builds without creating official-package fallback links; developer-installed packages, including links, retain native priority. Use an unpacked application to exercise the selected Host runtime, bundled pnpm, bundled dsh resources, plugin installation and repair paths.
 
 The [native/renderer keyboard tests](tests/keyboard.spec.ts) compile as part of the repository Client typecheck. Their Desktop imports are limited to Cordis-free input, persistence, IPC, browser-guest, and overlay modules.

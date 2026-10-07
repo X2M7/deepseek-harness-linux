@@ -215,6 +215,8 @@ pnpm run dev:desktop
 pnpm run start:desktop
 ```
 
+`dev:desktop` 支持从新克隆的工作区完成首次构建；`start:desktop` 需要已有构建产物，缺失时会报告对应路径。
+
 Web 侧的对应命令是 `pnpm run dev:web` 与 `pnpm run start:web`，见[开发指南](../../docs/development.zh.md)。Workspace 开发在 Linux 上使用内置标准 Node.js，在 macOS 和 Windows 上使用 Electron RunAsNode，运行当前 CLI 与私有 Desktop Host 包，插件管理和恢复使用 `$DSH_HOME/profiles/desktop`，与一次性工作区运行时分离。Host 在开发与打包构建中都使用 runtime 模块解析，不创建官方包的 fallback 链接；开发者安装的包（包括链接）保留原生优先级。需要验证所选 Host 运行时、内置 pnpm、内置 dsh 资源、插件安装和修复时，应运行未封装安装器的应用目录。
 
 [原生输入与渲染进程键盘测试](tests/keyboard.spec.ts)直接纳入仓库 Client 类型检查。它只导入不依赖 Cordis 的 Desktop 输入、持久化、IPC、浏览器 guest 和蒙层模块。
