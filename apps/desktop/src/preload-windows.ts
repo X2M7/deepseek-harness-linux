@@ -1,16 +1,16 @@
 import { WINDOWS_TITLEBAR_HEIGHT } from './windows-layout.ts'
-/** Synchronizes Windows context menus and caption colors with the application document. */
+/** Synchronizes desktop caption menus and colors with the application document. */
 import { ipcRenderer } from 'electron'
 import { DESKTOP_IPC } from './ipc.ts'
 import { installWindowsMenu } from './preload-menu.ts'
 
-/** Install the Windows-only titlebar marker and observe application language and palette changes. */
+/** Install the Windows/Linux titlebar marker and observe application language and palette changes. */
 export function syncWindowsAppearance(): void {
-  if (process.platform !== 'win32') return
+  if (process.platform !== 'win32' && process.platform !== 'linux') return
   const mark = (): void => {
     const root = document.documentElement
-    root.dataset.windowsTitlebar = ''
-    root.style.setProperty('--dsh-windows-titlebar-height', `${WINDOWS_TITLEBAR_HEIGHT}px`)
+    root.dataset.desktopTitlebar = ''
+    root.style.setProperty('--dsh-desktop-titlebar-height', `${WINDOWS_TITLEBAR_HEIGHT}px`)
   }
   // The root can be absent before the HTML parser creates it.
   if ((document.documentElement as HTMLElement | null) !== null) mark()

@@ -1,11 +1,11 @@
-/** Windows system tray: the always-present way back to a hidden window and the explicit quit entry. */
+/** Windows and Linux system tray: reopen a hidden window or explicitly quit. */
 
 import { Menu, nativeImage, Tray } from 'electron'
 import type { DesktopLocale } from './locale.ts'
 
 /** Main-process actions the tray triggers; both run the same paths as the window and application menu. */
 export interface DesktopTrayOptions {
-  /** Multi-size ICO rendered by `scripts/render-tray-icon.ts`; Windows picks the bitmap for the display scale. */
+  /** Windows uses a multi-size ICO; Linux uses the packaged PNG. */
   readonly iconPath: string
   readonly locale: () => DesktopLocale
   /** Show and focus the primary window. */

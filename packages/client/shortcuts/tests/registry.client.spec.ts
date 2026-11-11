@@ -3,6 +3,15 @@ import { bindingKey, initialShortcutConfig, normalizeBinding, presentBinding } f
 import type { ShortcutCommandId } from '../src/protocol.ts'
 import { ShortcutRegistry } from '../src/client/registry.ts'
 import { isWebBindingAllowed } from '../src/binding.ts'
+
+it.each(['macos', 'windows'] as const)('admits the existing single-modifier Web keys on %s', (platform) => {
+  const primary = platform === 'macos' ? 'meta' : 'control'
+  for (const code of ['Comma', 'Backslash']) {
+    expect(isWebBindingAllowed({ code, modifiers: [primary] }, platform)).toBe(true)
+    expect(isWebBindingAllowed({ code, modifiers: ['alt'] }, platform)).toBe(false)
+  }
+  expect(isWebBindingAllowed({ code: 'Backquote', modifiers: ['control'] }, platform)).toBe(true)
+})
 import type { ShortcutCommand, ShortcutGesture } from '../src/client/types.ts'
 
 const context = { region: 'page', modal: null, target: null } as const
@@ -11,9 +20,9 @@ it('admits modified Web combinations and refuses two-key chords', () => {
   expect(isWebBindingAllowed({ code: 'KeyB', secondCode: 'KeyJ', modifiers: [] }, 'macos')).toBe(false)
 })
 
-it('leaves Linux terminal control-W and control-R with the terminal while dispatching other bindings', () => {
+it('prioritizes Linux Desktop bindings over terminal input', () => {
   for (const [code, modifiers, status] of [
-    ['KeyW', ['control'], 'pass'], ['KeyR', ['control'], 'pass'], ['KeyB', ['control'], 'handled'],
+    ['KeyW', ['control'], 'handled'], ['KeyR', ['control'], 'handled'], ['KeyB', ['control'], 'handled'],
     ['KeyB', ['alt'], 'handled'],
     ['KeyB', ['control', 'alt'], 'handled'], ['KeyB', ['control', 'shift'], 'handled'],
   ] as const) {
@@ -87,10 +96,8 @@ describe('physical key registry', () => {
       } }))).toThrow('Unsupported Web')
     expect(() => registry.register(command({ id: 'system.copy' as ShortcutCommandId,
       defaults: {
-        'desktop:macos': { code: 'KeyC', modifiers: ['primary'] },
-        'desktop:windows': { code: 'KeyC', modifiers: ['primary'] },
-        'desktop:linux': { code: 'KeyC', modifiers: ['primary'] },
-      } }))).toThrow('Reserved')
+        'web:linux': { code: 'KeyC', modifiers: ['primary'] },
+      } }))).toThrow('Unsupported Web')
     expect(registry.catalog.getSnapshot()).toHaveLength(1)
     const changed = vi.fn()
     registry.catalog.subscribe(changed)

@@ -1,0 +1,66 @@
+diff --git a/out/options/macOptions.d.ts b/out/options/macOptions.d.ts
+index e93987d973399b17f3970c858abb49f5e4b193d6..445a73c81e1d7eb61dc318373d2331487934d3f5 100644
+--- a/out/options/macOptions.d.ts
++++ b/out/options/macOptions.d.ts
+@@ -258,7 +258,7 @@ export interface DmgOptions extends TargetSpecificOptions {
+      * The disk image format. `ULFO` (lzfse-compressed image (OS X 10.11+ only)).
+      * @default UDZO
+      */
+-    format?: "UDRW" | "UDRO" | "UDCO" | "UDZO" | "UDBZ" | "ULFO";
++    format?: "UDRW" | "UDRO" | "UDCO" | "UDZO" | "UDBZ" | "ULFO" | "ULMO";
+     /**
+      * The filesystem for the DMG volume (e.g. `"APFS"` or `"HFS+"`)
+      * This will be changed to APFS in the next major release, so it is recommended to set it explicitly to HFS+ if you want to keep using HFS+ (e.g. for better compatibility with older macOS versions).
+diff --git a/scheme.json b/scheme.json
+index a637bab2668ef88e7382dd4aa5db62b74fdde898..ebcafac58971bdd7c69b78ceddcd401a75ffaa35 100644
+--- a/scheme.json
++++ b/scheme.json
+@@ -979,7 +979,8 @@
+             "UDRO",
+             "UDRW",
+             "UDZO",
+-            "ULFO"
++            "ULFO",
++            "ULMO"
+           ],
+           "type": "string"
+         },
+diff --git a/out/targets/appimage/appImageUtil.js b/out/targets/appimage/appImageUtil.js
+index 12f078abd42700857b239b0e53cd568c1b1836b7..5106f9707eecc69a291ab49f25dbdf6413b83773 100644
+--- a/out/targets/appimage/appImageUtil.js
++++ b/out/targets/appimage/appImageUtil.js
+@@ -205,32 +205,10 @@ isEulaAccepted=1
+-HAVE_NO_SANDBOX=0
+-for arg in "\${args[@]}" ; do
+-  if [ "$arg" = --no-sandbox ] ; then
+-    HAVE_NO_SANDBOX=1
+-    break
+-  fi
+-done
+-NO_SANDBOX=()
+-# Use 'unshare -Ur true' as a heuristic to detect whether user namespaces are available.
+-# Notes:
+-#   - When running as root, this check will always succeed even if the sandbox configuration
+-#     actually relies on unprivileged user namespaces. In practice, Chrome/Electron usually
+-#     disables or adjusts the sandbox separately when running as root, so this probe is mostly
+-#     a no-op in that scenario.
+-#   - On minimal systems (e.g. Alpine or stripped-down containers) 'unshare' may not exist.
+-#     In that case the shell will return exit code 127 ("command not found"), which will cause
+-#     us to add '--no-sandbox'. This is an intentional fail-safe: we prefer the app to start
+-#     without sandboxing rather than crash on startup.
+-if [ $HAVE_NO_SANDBOX -eq 0 ] && ! unshare -Ur true 2>/dev/null ; then
+-  NO_SANDBOX=(--no-sandbox)
+-fi
+-
+ atexit()
+ {
+   if [ $isEulaAccepted == 1 ] ; then
+     if [ $NUMBER_OF_ARGS -eq 0 ] ; then
+-      exec "$BIN" "\${NO_SANDBOX[@]}"
++      exec "$BIN"
+     else
+-      exec "$BIN" "\${NO_SANDBOX[@]}" "\${args[@]}"
++      exec "$BIN" "\${args[@]}"
+     fi
+   fi
+ }

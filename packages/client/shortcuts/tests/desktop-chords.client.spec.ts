@@ -10,7 +10,7 @@ const other = 'test.other' as ShortcutCommandId
 const pair = { code: 'KeyA', secondCode: 'KeyB', modifiers: [] } as const
 const definitions = [{ id, defaults: {} }, { id: other, defaults: {} }]
 
-it.each(['macos', 'windows'] as const)('rejects overlapping %s defaults at registration and IPC ingress without disabling the active command', (platform) => {
+it.each(['macos', 'windows', 'linux'] as const)('rejects overlapping %s defaults at registration and IPC ingress without disabling the active command', (platform) => {
   const modifier = platform === 'macos' ? 'meta' : 'control'
   for (const code of ['KeyA', 'KeyB']) {
     const single: ShortcutBinding = { code, modifiers: ['primary'] }
@@ -29,7 +29,7 @@ it.each(['macos', 'windows'] as const)('rejects overlapping %s defaults at regis
       const accepted = registry.catalog.getSnapshot()
       expect(() => register(catalog[1]!)).toThrow('Conflicting')
       expect(registry.catalog.getSnapshot()).toBe(accepted)
-      expect(registry.dispatch({ ...first, meta: platform === 'macos', control: platform === 'windows',
+      expect(registry.dispatch({ ...first, meta: platform === 'macos', control: platform !== 'macos',
         alt: false, shift: false, repeat: false, composing: false, defaultPrevented: false },
       { region: 'page', modal: null, target: null }, vi.fn()).status).toBe('handled')
       expect(run).toHaveBeenCalledOnce()
@@ -40,7 +40,7 @@ it.each(['macos', 'windows'] as const)('rejects overlapping %s defaults at regis
   }
 })
 
-it.each([['web', 'macos'], ['web', 'windows'], ['web', 'linux'], ['desktop', 'linux']] as const)(
+it.each([['web', 'macos'], ['web', 'windows'], ['web', 'linux']] as const)(
   'rejects bare keys and chords in %s on %s', (runtime, platform) => {
     for (const binding of [pair, { code: 'KeyA', modifiers: [] }, { ...pair, modifiers: ['control', 'alt', 'shift', 'meta'] }] as const) {
       expect(bindingIssue(normalizeBinding(binding, platform), runtime, platform)).not.toBeNull()
@@ -61,7 +61,7 @@ it('canonicalizes unordered pairs, rejects invalid main keys, and omits unsuppor
   ]) expect(() => parseBinding(input)).toThrow()
 })
 
-it.each(['macos', 'windows'] as const)('migrates %s preferences on write and rejects both directions of single/chord conflicts', async (platform) => {
+it.each(['macos', 'windows', 'linux'] as const)('migrates %s preferences on write and rejects both directions of single/chord conflicts', async (platform) => {
   let raw = JSON.stringify({ schemaVersion: 1, profiles: { 'web:macos': { 'dormant.web': null } } })
   const original = raw
   const store = new ShortcutPersistence({ read: () => raw, write: (next) => { raw = next } }, 'desktop', platform, false, () => {})
@@ -86,7 +86,7 @@ it.each(['macos', 'windows'] as const)('migrates %s preferences on write and rej
   expect(effectiveShortcuts(definitions, overlapping, 'desktop', platform).map(row => row.conflicts)).toEqual([[other], [id]])
 })
 
-it.each(['macos', 'windows'] as const)('rejects direct %s writes that overlap fixed actions and disables previously saved conflicts', async (platform) => {
+it.each(['macos', 'windows', 'linux'] as const)('rejects direct %s writes that overlap fixed actions and disables previously saved conflicts', async (platform) => {
   const fixedId = 'menu.dismiss' as ShortcutCommandId
   const catalog = parseShortcutDefinitions([...definitions,
     { id: fixedId, defaults: {}, fixed: [{ code: 'Escape', modifiers: [] }] }])

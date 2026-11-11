@@ -95,11 +95,11 @@ export function parseShortcutDocument(raw: string | null): ShortcutDocument | 'i
  */
 export function bindingIssue(binding: NormalizedBinding, runtime: ShortcutRuntime, platform: ShortcutPlatform): BindingIssue | null {
   const { code, modifiers } = binding
-  if (runtime === 'desktop' && (platform === 'windows' || platform === 'macos')) return null
+  if (runtime === 'desktop') return null
   if (binding.secondCode !== undefined) return 'unsupported-key'
   if (modifiers.length === 0 || modifiers.every(modifier => modifier === 'shift')) return 'modifier-required'
   if ((platform === 'windows' || platform === 'macos') && modifiers.length >= 3) return null
-  if (runtime === 'web' && (platform === 'windows' || platform === 'macos') && isWebBindingAllowed(binding, platform)) return null
+  if ((platform === 'windows' || platform === 'macos') && isWebBindingAllowed(binding, platform)) return null
   const primary = modifiers.includes(platform === 'macos' ? 'meta' : 'control')
   if (['Escape', 'Tab', 'Space', 'Backspace', 'Delete', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(code)
     || (code === 'Enter' && !modifiers.includes('alt'))
@@ -108,7 +108,7 @@ export function bindingIssue(binding: NormalizedBinding, runtime: ShortcutRuntim
     || (platform !== 'macos' && (modifiers.includes('meta') || (modifiers.includes('alt') && ['F4', 'F2'].includes(code))))
     || (platform === 'macos' && modifiers.includes('control') && modifiers.includes('meta'))
     || (platform === 'macos' && modifiers.includes('alt') && !primary)) return 'reserved'
-  if (runtime === 'web' && !isWebBindingAllowed(binding, platform)) return 'unsupported-browser'
+  if (!isWebBindingAllowed(binding, platform)) return 'unsupported-browser'
   return null
 }
 
@@ -173,7 +173,7 @@ export function overlappingBindings(left: NormalizedBinding, right: NormalizedBi
  */
 export function editShortcutDocument(document: ShortcutDocument, edit: ShortcutEdit,
   runtime: ShortcutRuntime, platform: ShortcutPlatform): ShortcutDocument {
-  const schemaVersion = runtime === 'desktop' && (platform === 'macos' || platform === 'windows') ? 2 : document.schemaVersion
+  const schemaVersion = runtime === 'desktop' ? 2 : document.schemaVersion
   const profile = `${runtime}:${platform}` as const
   let overrides = { ...document.profiles[profile] }
   switch (edit.type) {

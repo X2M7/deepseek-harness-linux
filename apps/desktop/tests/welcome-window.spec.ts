@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveDesktopLocale } from '../src/locale.ts'
 import { needsWelcome, WELCOME_IPC } from '../src/welcome-api.ts'
 
@@ -7,9 +7,11 @@ const electron = vi.hoisted(() => ({
   create: vi.fn<(options: unknown) => ReturnType<typeof createWindow>>(),
   root: '/desktop-app',
   handlers: new Map<string, (event: unknown, value?: unknown, attributes?: unknown) => Promise<unknown>>(),
+  nativeTheme: { shouldUseDarkColors: false, on: vi.fn(), off: vi.fn() },
 }))
 vi.mock('electron', () => ({
   app: { getAppPath: () => electron.root },
+  nativeTheme: electron.nativeTheme,
   BrowserWindow: vi.fn(function (options: unknown) { return electron.create(options) }),
   ipcMain: {
     handle: (name: string, handler: (event: unknown, value?: unknown, attributes?: unknown) => Promise<unknown>) => {
@@ -33,11 +35,18 @@ function createWindow() {
     isDestroyed: vi.fn().mockReturnValue(false),
     destroy: vi.fn(),
     show: vi.fn(),
+    setBackgroundColor: vi.fn(),
+    setTitleBarOverlay: vi.fn(),
     once: vi.fn<(name: string, callback: () => void) => void>(),
   }
 }
 
-beforeEach(() => { electron.create.mockReset(); electron.handlers.clear() })
+beforeEach(() => {
+  electron.create.mockReset(); electron.handlers.clear()
+  electron.nativeTheme.shouldUseDarkColors = false
+  electron.nativeTheme.on.mockReset(); electron.nativeTheme.off.mockReset()
+})
+afterEach(() => { vi.restoreAllMocks() })
 
 const operations = {
   analyticsEnabled: async () => true,
@@ -69,10 +78,31 @@ describe('desktop welcome window', () => {
       expect(options.backgroundMaterial).toBe('acrylic')
       expect(options.titleBarOverlay).toMatchObject({ height: 42 })
     } else {
-      expect(options.backgroundColor).toBe('#FFFFFF')
+      expect(options.backgroundColor).toBe('#f9fafb')
+      expect(options.titleBarStyle).toBe('hidden')
+      expect(options.titleBarOverlay).toEqual({ color: '#f9fafb', symbolColor: '#0f1115', height: 42 })
       expect(options.vibrancy).toBeUndefined()
       expect(options.backgroundMaterial).toBeUndefined()
     }
+  })
+
+  it('keeps the Linux welcome chrome in sync with the system color scheme', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+    const window = createWindow()
+    electron.create.mockReturnValue(window)
+    electron.nativeTheme.shouldUseDarkColors = true
+    await openWelcomeWindow(resolveDesktopLocale('en'), operations)
+    expect(electron.create).toHaveBeenCalledWith(expect.objectContaining({
+      backgroundColor: '#1b1b1c',
+      titleBarOverlay: { color: '#1b1b1c', symbolColor: '#f9fafb', height: 42 },
+    }))
+    const sync = electron.nativeTheme.on.mock.calls[0]![1] as () => void
+    electron.nativeTheme.shouldUseDarkColors = false
+    sync()
+    expect(window.setBackgroundColor).toHaveBeenCalledWith('#f9fafb')
+    expect(window.setTitleBarOverlay).toHaveBeenCalledWith({ color: '#f9fafb', symbolColor: '#0f1115' })
+    for (const [, closed] of window.once.mock.calls) closed()
+    expect(electron.nativeTheme.off).toHaveBeenCalledWith('updated', sync)
   })
 
   it('waits for its local document and blocks renderer navigation', async () => {
@@ -138,7 +168,7 @@ describe('desktop welcome window', () => {
     await expect(copy(own, 42)).rejects.toThrow('invalid attempt')
     await copy(own, 'attempt')
     expect(copySignInLink).toHaveBeenCalledExactlyOnceWith('attempt')
-    window.once.mock.calls[0]![1]()
+    for (const [, closed] of window.once.mock.calls) closed()
     expect(electron.handlers.size).toBe(0)
   })
 
@@ -154,8 +184,8 @@ describe('desktop welcome window', () => {
     await opening
     expect(previous.show).not.toHaveBeenCalled()
     expect(current.show).toHaveBeenCalledOnce()
-    previous.once.mock.calls[0]![1]()
-    current.once.mock.calls[0]![1]()
+    for (const [, closed] of previous.once.mock.calls) closed()
+    for (const [, closed] of current.once.mock.calls) closed()
   })
 
   it('replaces handlers before the previous native window emits closed', async () => {
@@ -171,12 +201,12 @@ describe('desktop welcome window', () => {
     const currentHandler = electron.handlers.get(WELCOME_IPC.start)!
     await expect(previousHandler(previousSender)).rejects.toThrow('unowned frame')
     await expect(currentHandler(previousSender)).rejects.toThrow('unowned frame')
-    previous.once.mock.calls[0]![1]()
+    for (const [, closed] of previous.once.mock.calls) closed()
     expect(electron.handlers.get(WELCOME_IPC.start)).toBe(currentHandler)
     await currentHandler({ sender: current.webContents, senderFrame: current.webContents.mainFrame })
     expect(currentStart).toHaveBeenCalledOnce()
     expect(previousStart).not.toHaveBeenCalled()
-    current.once.mock.calls[0]![1]()
+    for (const [, closed] of current.once.mock.calls) closed()
     expect(electron.handlers.size).toBe(0)
   })
 

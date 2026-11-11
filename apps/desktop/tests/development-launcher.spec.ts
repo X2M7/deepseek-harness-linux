@@ -69,8 +69,8 @@ function fixture() {
 it('builds a fresh checkout before importing preparation modules and stops after a failed build', ({ task }) => {
   const f = fixture()
   const output = f.run([], task.timeout)
-  expect(output).toContain(`desktop development: ${join(f.root, 'package-manager.mjs')} run build exited with 17`)
-  expect(JSON.parse(readFileSync(f.calls, 'utf8'))).toEqual({ args: ['run', 'build'], cwd: f.root })
+  expect(output).toContain(`desktop development: ${join(f.root, 'package-manager.mjs')} run build:artifacts exited with 17`)
+  expect(JSON.parse(readFileSync(f.calls, 'utf8'))).toEqual({ args: ['run', 'build:artifacts'], cwd: f.root })
 })
 
 it('reports missing artifacts without building or importing preparation modules when build is skipped', ({ task }) => {

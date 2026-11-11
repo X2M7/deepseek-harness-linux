@@ -9,23 +9,24 @@ vi.mock('../src/preload-menu.ts', () => ({ installWindowsMenu: () => ({ update: 
 
 afterEach(() => {
   window.dispatchEvent(new Event('pagehide'))
-  document.documentElement.removeAttribute('data-windows-titlebar')
-  document.documentElement.style.removeProperty('--dsh-windows-titlebar-height')
+  document.documentElement.removeAttribute('data-desktop-titlebar')
+  document.documentElement.style.removeProperty('--dsh-desktop-titlebar-height')
   document.documentElement.lang = 'en'
   document.body.removeAttribute('data-ds-dark-theme')
   vi.restoreAllMocks()
   send.mockClear()
 })
 
-it.each(['darwin', 'linux'] as const)('does not install Windows controls on %s', (platform) => {
+it('does not install caption controls on macOS', () => {
+  const platform = 'darwin'
   vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
   syncWindowsAppearance()
-  expect(document.documentElement.hasAttribute('data-windows-titlebar')).toBe(false)
+  expect(document.documentElement.hasAttribute('data-desktop-titlebar')).toBe(false)
   expect(send).not.toHaveBeenCalled()
 })
 
-it('synchronizes live language and palette changes and stops observing a closed document', async () => {
-  vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+it.each(['win32', 'linux'] as const)('synchronizes live language and palette changes on %s and stops observing a closed document', async (platform) => {
+  vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
   vi.spyOn(document, 'readyState', 'get').mockReturnValue('loading')
   vi.spyOn(globalThis, 'getComputedStyle').mockImplementation(() => ({
     backgroundColor: document.body.hasAttribute('data-ds-dark-theme') ? 'oklch(0.2 0 0)' : 'hsl(0 0% 100%)',
@@ -40,9 +41,9 @@ it('synchronizes live language and palette changes and stops observing a closed 
   document.documentElement.lang = 'en'
   syncWindowsAppearance()
   expect(send).not.toHaveBeenCalled()
-  expect(document.documentElement.hasAttribute('data-windows-titlebar')).toBe(true)
+  expect(document.documentElement.hasAttribute('data-desktop-titlebar')).toBe(true)
   window.dispatchEvent(new Event('DOMContentLoaded'))
-  expect(document.documentElement.style.getPropertyValue('--dsh-windows-titlebar-height')).toBe('40px')
+  expect(document.documentElement.style.getPropertyValue('--dsh-desktop-titlebar-height')).toBe('40px')
   expect(send).toHaveBeenLastCalledWith(DESKTOP_IPC.windowsAppearance, 'en', 'rgba(255, 255, 255, 1)', 'rgba(0, 0, 0, 1)')
   document.documentElement.lang = 'zh-CN'
   document.body.setAttribute('data-ds-dark-theme', '')

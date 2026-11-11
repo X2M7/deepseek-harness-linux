@@ -63,7 +63,7 @@ export function bindingKey(binding: NormalizedBinding): string {
 }
 
 /**
- * Format keycaps and ARIA; Windows separates modifiers with plus signs, while chord keys remain adjacent.
+ * Format keycaps and ARIA; Windows and Linux separate modifiers with plus signs, while chord keys remain adjacent.
  * @param binding - normalized binding, or null for an unbound command.
  * @param platform - receiving device platform.
  * @returns visible keycaps; two-key chords omit ARIA shortcuts, which only support one non-modifier key.
@@ -83,7 +83,7 @@ export function presentBinding(binding: NormalizedBinding | null, platform: Shor
   const second = binding.secondCode === undefined ? []
     : [keyNames[binding.secondCode] ?? binding.secondCode.replace(/^(Key|Digit)/u, '')]
   const keys = [...binding.modifiers.map(value => symbols[value]), key]
-  return { keys: [...platform === 'windows' ? keys.flatMap((label, index) => index === 0 ? [label] : ['+', label]) : keys, ...second],
+  return { keys: [...platform === 'macos' ? keys : keys.flatMap((label, index) => index === 0 ? [label] : ['+', label]), ...second],
     aria: binding.secondCode === undefined ? [...binding.modifiers.map(value => ariaNames[value]), ariaKey].join('+') : undefined }
 }
 

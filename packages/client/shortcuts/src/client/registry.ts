@@ -145,7 +145,7 @@ export class ShortcutRegistry {
   }
 
   /**
-   * Windows/macOS Desktop bindings override local regions and modal controls independently of their configuration source.
+   * Desktop bindings override local regions and modal controls independently of their configuration source.
    * @param gesture - normalized DOM/native input facts.
    * @param context - synchronous input and modal owner.
    * @param consume - adapter's preventDefault, called before business execution.
@@ -158,7 +158,7 @@ export class ShortcutRegistry {
       ...(gesture.secondCode === undefined ? {} : { secondCode: gesture.secondCode }) })
     const key = this.bindings.has(pairKey) || this.conflicts.has(pairKey) ? pairKey : bindingKey({ code: gesture.code, modifiers })
     const command = this.bindings.get(key) ?? this.conflicts.get(key)
-    const priority = this.runtime === 'desktop' && (this.platform === 'windows' || this.platform === 'macos')
+    const priority = this.runtime === 'desktop'
     if (command === undefined || (!priority && !command.regions.includes(context.region))) return { status: 'pass' }
     if (!priority && context.region === 'terminal' && gesture.control && !gesture.meta && !gesture.alt && !gesture.shift
       && (gesture.code === 'KeyW' || gesture.code === 'KeyR')) return { status: 'pass' }

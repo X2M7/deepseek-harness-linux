@@ -62,6 +62,13 @@ it('localizes caption entries and removes the menu on disposal', () => {
   expect(document.querySelector('[data-windows-menu]')).toBeNull()
 })
 
+it('keeps caption menus inside the native window-control free area', () => {
+  menu = installWindowsMenu()
+  const style = document.querySelector('[data-windows-menu]')!.shadowRoot!.querySelector('style')!.textContent
+  expect(style).toContain('left: calc(env(titlebar-area-x, 0px) + var(--dsh-desktop-menu-start, 48px))')
+  expect(style).toContain('max-width: max(0px, calc(env(titlebar-area-width, 100%) - var(--dsh-desktop-menu-start, 48px)))')
+})
+
 it('opens native menus without stealing pointer focus and resets popup state when closed', async () => {
   let close!: () => void
   invoke.mockImplementation(() => new Promise<void>((resolve) => { close = resolve }))

@@ -24,8 +24,8 @@ export interface ShortcutCommand {
   readonly defaults: Readonly<Partial<Record<ShortcutProfile, ShortcutBinding>>>
   readonly regions: readonly ShortcutRegion[]
   /**
-   * Allowed modal identifiers for Web/Linux keyboard input and explicit menu actions;
-   * Windows/macOS Desktop keyboard bindings take priority.
+   * Allowed modal identifiers for Web keyboard input and explicit menu actions;
+   * Desktop keyboard bindings take priority.
    */
   readonly modals: readonly string[]
   resolve(context: ShortcutContext): ShortcutResolution

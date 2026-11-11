@@ -83,6 +83,22 @@ const command = { id: 'test.toggle' as ShortcutCommandId, label: () => 'Toggle',
   }, regions: ['page'] as const, modals: [],
   resolve: () => ({ status: 'handled' as const, run() {} }) }
 
+it('routes Linux Desktop commands through native input without repeating DOM delivery', async () => {
+  const f = desktop()
+  document.documentElement.dataset.platform = 'linux'
+  const { service } = mount()
+  const run = vi.fn()
+  service.register({ ...command, resolve: () => ({ status: 'handled', run }) })
+  await vi.waitFor(() => { expect(service.config.getSnapshot().status).toBe('ready') })
+  document.body.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyB', key: 'b', ctrlKey: true,
+    bubbles: true, cancelable: true }))
+  expect(run).not.toHaveBeenCalled()
+  const deliver = f.keyboard.subscribe.mock.calls[0]![0]
+  deliver({ kind: 'keyboard', frameName: '', revision: service.config.getSnapshot().revision,
+    code: 'KeyB', control: true, alt: false, shift: false, meta: false, repeat: false })
+  expect(run).toHaveBeenCalledOnce()
+})
+
 it('waits for the Desktop handshake and ignores older get, edit, and broadcast replies', async () => {
   const f = desktop(), first = deferred<ShortcutConfigSnapshot>()
   f.api.get.mockReturnValueOnce(first.promise)

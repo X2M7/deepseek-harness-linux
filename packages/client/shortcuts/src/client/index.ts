@@ -67,8 +67,7 @@ export default class ShortcutsService extends Service implements Shortcuts {
     }, 'shortcuts: preferences')
     this.syncDefinitions()
     ctx.effect(() => {
-      const off = installKeyboard(window, this.registry, (input) => { this.fixedInput(input) },
-        keyboard !== undefined && (this.platform === 'macos' || this.platform === 'windows'))
+      const off = installKeyboard(window, this.registry, (input) => { this.fixedInput(input) }, keyboard !== undefined)
       return () => { off(); this.fixedListeners.clear() }
     }, 'shortcuts: keyboard')
     ctx.effect(() => ctx.locale.subscribe(() => { this.registry.refreshLabels() }), 'shortcuts: locale')

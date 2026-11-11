@@ -1,9 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { bindingIssue, editShortcutDocument, effectiveShortcuts, normalizeBinding, parseBinding, parseShortcutDefinitions,
-  parseShortcutDocument, parseShortcutEdit } from '../src/protocol.ts'
+import { bindingIssue, editShortcutDocument, effectiveShortcuts, normalizeBinding, overlappingBindings, parseBinding,
+  parseShortcutDefinitions, parseShortcutDocument, parseShortcutEdit } from '../src/protocol.ts'
 import type { ShortcutCommandId, ShortcutDefinition, ShortcutDocument } from '../src/protocol.ts'
 
 const id = (value: string) => value as ShortcutCommandId
+it('distinguishes identical two-key chords from pairs sharing only one key', () => {
+  const left = { code: 'KeyA', secondCode: 'KeyB', modifiers: [] }
+  expect(overlappingBindings(left, { code: 'KeyB', secondCode: 'KeyA', modifiers: [] })).toBe(true)
+  expect(overlappingBindings(left, { code: 'KeyB', secondCode: 'KeyC', modifiers: [] })).toBe(false)
+})
+it.each(['macos', 'windows', 'linux'] as const)('accepts Mod+Shift+Period on %s without permitting shift-only Web bindings', (platform) => {
+  const binding = normalizeBinding({ code: 'Period', modifiers: ['primary', 'shift'] }, platform)
+  for (const runtime of ['web', 'desktop'] as const) expect(bindingIssue(binding, runtime, platform)).toBeNull()
+  for (const code of ['Period', 'F12', 'KeyJ']) {
+    expect(bindingIssue(normalizeBinding({ code, modifiers: ['shift'] }, platform), 'web', platform)).toBe('modifier-required')
+  }
+})
 it('reserves the macOS Web control-command combination', () => {
   expect(bindingIssue({ code: 'KeyB', modifiers: ['control', 'meta'] }, 'web', 'macos')).toBe('reserved')
 })
@@ -57,24 +69,27 @@ describe('preference document validation and conflict resolution', () => {
       .toEqual([[id('test.one')], [id('test.two')]])
   })
 
-  it('keeps Linux desktop and browser reservations', () => {
+  it('keeps Linux Web reservations while Desktop accepts native combinations', () => {
     const platform = 'linux'
     const check = (code: string, modifiers: readonly ('primary' | 'control' | 'alt' | 'shift' | 'meta')[], runtime: 'web' | 'desktop' = 'desktop') =>
       bindingIssue(normalizeBinding({ code, modifiers }, platform), runtime, platform)
-    for (const code of ['KeyC', 'KeyV', 'KeyX', 'KeyZ', 'KeyY', 'KeyQ', 'Tab', 'Escape', 'Space', 'Enter']) expect(check(code, ['primary'])).toBe('reserved')
-    expect(check('KeyA', ['primary', 'shift'])).toBeNull()
-    expect(check('KeyA', ['primary'])).toBe('reserved')
-    expect(check('KeyJ', [])).toBe('modifier-required')
-    expect(check('KeyJ', ['shift'])).toBe('modifier-required')
-    expect(check('KeyJ', ['primary'])).toBeNull()
+    for (const code of ['KeyC', 'KeyV', 'KeyX', 'KeyZ', 'KeyY', 'KeyQ', 'Tab', 'Escape', 'Space', 'Enter']) {
+      expect(check(code, ['primary'], 'web')).toBe('reserved')
+      expect(check(code, ['primary'])).toBeNull()
+    }
+    expect(check('KeyA', ['primary'], 'web')).toBe('reserved')
+    expect(check('KeyJ', [], 'web')).toBe('modifier-required')
+    expect(check('KeyJ', ['shift'], 'web')).toBe('modifier-required')
+    expect(check('KeyJ', [])).toBeNull()
+    expect(check('KeyJ', ['shift'])).toBeNull()
     for (const code of ['KeyN', 'KeyP', 'KeyW', 'KeyR', 'KeyO', 'KeyJ']) expect(check(code, ['primary'], 'web')).toBe('unsupported-browser')
     for (const code of ['Comma', 'Period']) expect(check(code, ['primary', 'shift'], 'web')).toBeNull()
     expect(check('Slash', ['primary'], 'web')).toBeNull()
-    expect(check('F4', ['alt'], 'desktop')).toBe('reserved')
-    expect(check('KeyL', ['meta', 'control'], 'desktop')).toBe('reserved')
+    expect(check('F4', ['alt'], 'web')).toBe('reserved')
+    expect(check('KeyL', ['meta', 'control'], 'web')).toBe('reserved')
   })
 
-  it.each(['macos', 'windows'] as const)('accepts %s desktop editing and system combinations, and single keys', (platform) => {
+  it.each(['macos', 'windows', 'linux'] as const)('accepts %s desktop editing and system combinations, and single keys', (platform) => {
     for (const [code, modifiers] of [
       ...['KeyC', 'KeyV', 'KeyX', 'KeyZ', 'KeyY', 'KeyA', 'KeyQ', 'KeyH', 'Tab', 'Space'].map(code => [code, ['primary']] as const),
       ['KeyC', ['control']], ['KeyX', ['control']], ['KeyN', ['shift']], ['Tab', ['control']], ['Tab', ['shift']],
@@ -90,7 +105,7 @@ describe('preference document validation and conflict resolution', () => {
   })
 
   it.each([
-    ['web', 'macos'], ['web', 'windows'], ['desktop', 'macos'], ['desktop', 'windows'],
+    ['web', 'macos'], ['web', 'windows'], ['desktop', 'macos'], ['desktop', 'windows'], ['desktop', 'linux'],
   ] as const)('accepts three and four distinct modifiers in %s on %s and still detects conflicts', (runtime, platform) => {
     for (const modifiers of [
       ['control', 'alt', 'shift'], ['control', 'alt', 'meta'], ['control', 'shift', 'meta'],
@@ -166,9 +181,7 @@ describe('preference document validation and conflict resolution', () => {
       'web:linux': primary('KeyN'),
     } }],
     [{ ...definitions[0], defaults: {
-      'desktop:macos': primary('KeyC'),
-      'desktop:windows': primary('KeyC'),
-      'desktop:linux': primary('KeyC'),
+      'web:linux': primary('KeyC'),
     } }]]) expect(() => parseShortcutDefinitions(value)).toThrow()
   })
 })

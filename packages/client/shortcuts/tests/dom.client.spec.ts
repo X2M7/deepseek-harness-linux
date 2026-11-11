@@ -9,7 +9,7 @@ import type { ShortcutCommandId } from '../src/protocol.ts'
 let dispose: (() => void) | undefined
 afterEach(() => { dispose?.(); document.body.replaceChildren(); vi.restoreAllMocks() })
 
-function mount(runtime: 'desktop' | 'web' = 'web', platform: 'macos' | 'windows' = 'windows') {
+function mount(runtime: 'desktop' | 'web' = 'web', platform: 'macos' | 'windows' | 'linux' = 'windows') {
   const registry = new ShortcutRegistry(runtime, platform)
   const run = vi.fn()
   registry.register({ id: 'shortcuts.open' as ShortcutCommandId, label: () => 'Shortcuts', aliases: [],
@@ -32,12 +32,12 @@ const press = (target: EventTarget, extra: KeyboardEventInit = {}) => {
   return event
 }
 
-it.each(['macos', 'windows'] as const)('leaves configurable %s shortcuts to native input while retaining DOM fixed-action observation', (platform) => {
+it.each(['macos', 'windows', 'linux'] as const)('leaves configurable %s shortcuts to native input while retaining DOM fixed-action observation', (platform) => {
   const { registry, input, run } = mount('desktop', platform)
   dispose?.()
   const fixed = vi.fn<(input: ShortcutFixedInput) => void>()
   dispose = installKeyboard(window, registry, fixed, true)
-  expect(press(input, { ctrlKey: platform === 'windows', metaKey: platform === 'macos' }).defaultPrevented).toBe(false)
+  expect(press(input, { ctrlKey: platform !== 'macos', metaKey: platform === 'macos' }).defaultPrevented).toBe(false)
   registry.configure({ ...registry.config.getSnapshot(), revision: 'pair' as never,
     document: { schemaVersion: 2, profiles: { [`desktop:${platform}`]: {
       'shortcuts.open': { code: 'KeyF', secondCode: 'KeyG', modifiers: [] },

@@ -3,7 +3,7 @@ import type { SignInAttemptId } from '@deepseek-ai/dsh-deepseek-account/types'
 
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { app, BrowserWindow, ipcMain, type BrowserWindowConstructorOptions, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme, type BrowserWindowConstructorOptions, type IpcMainInvokeEvent } from 'electron'
 import type { DesktopLocale } from './locale.ts'
 import { WELCOME_IPC, type WelcomeOperations } from './welcome-api.ts'
 
@@ -11,9 +11,11 @@ import { WELCOME_IPC, type WelcomeOperations } from './welcome-api.ts'
  * Resolve the fixed-size welcome window's native material and controls.
  * @param platform - operating system hosting Electron.
  * @param locale - shell-owned localized copy.
+ * @param dark - effective native color scheme for the Linux fallback fill.
  * @returns sandboxed window options with a locale-only preload.
  */
-export function welcomeWindowOptions(platform: NodeJS.Platform, locale: DesktopLocale): BrowserWindowConstructorOptions {
+export function welcomeWindowOptions(platform: NodeJS.Platform, locale: DesktopLocale, dark = false): BrowserWindowConstructorOptions {
+  const linuxFill = dark ? '#1b1b1c' : '#f9fafb'
   return {
     width: 600,
     height: 700,
@@ -24,7 +26,7 @@ export function welcomeWindowOptions(platform: NodeJS.Platform, locale: DesktopL
     fullscreenable: false,
     show: false,
     title: locale.messages.welcomeTitle,
-    backgroundColor: platform === 'darwin' || platform === 'win32' ? '#00000000' : '#FFFFFF',
+    backgroundColor: platform === 'linux' ? linuxFill : '#00000000',
     ...(platform === 'darwin' ? {
       titleBarStyle: 'hidden',
       trafficLightPosition: { x: 21, y: 21 },
@@ -35,6 +37,10 @@ export function welcomeWindowOptions(platform: NodeJS.Platform, locale: DesktopL
       titleBarStyle: 'hidden',
       titleBarOverlay: { color: '#00000000', symbolColor: '#0F1115', height: 42 },
       backgroundMaterial: 'acrylic',
+    } as const : {}),
+    ...(platform === 'linux' ? {
+      titleBarStyle: 'hidden',
+      titleBarOverlay: { color: linuxFill, symbolColor: dark ? '#f9fafb' : '#0f1115', height: 42 },
     } as const : {}),
     webPreferences: {
       preload: fileURLToPath(new URL('./preload-welcome.cjs', import.meta.url)),
@@ -57,8 +63,19 @@ let disposeActiveHandlers: (() => void) | undefined
  * @returns the visible window; a failed load destroys it before rejecting.
  */
 export async function openWelcomeWindow(locale: DesktopLocale, operations: WelcomeOperations): Promise<BrowserWindow> {
-  const options = welcomeWindowOptions(process.platform, locale)
+  const options = welcomeWindowOptions(process.platform, locale, nativeTheme.shouldUseDarkColors)
   const window = new BrowserWindow(options)
+  if (process.platform === 'linux') {
+    const syncTheme = (): void => {
+      if (window.isDestroyed()) return
+      const dark = nativeTheme.shouldUseDarkColors
+      const fill = dark ? '#1b1b1c' : '#f9fafb'
+      window.setBackgroundColor(fill)
+      window.setTitleBarOverlay({ color: fill, symbolColor: dark ? '#f9fafb' : '#0f1115' })
+    }
+    nativeTheme.on('updated', syncTheme)
+    window.once('closed', () => { nativeTheme.off('updated', syncTheme) })
+  }
   disposeActiveHandlers?.()
   let active = true
   const disposeHandlers = (): void => {

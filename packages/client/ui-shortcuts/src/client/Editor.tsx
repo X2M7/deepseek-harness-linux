@@ -41,7 +41,7 @@ EditorProps) {
   const writing = useRef(false)
   /* v8 ignore next -- The effect installs reset before the recorder is enabled. */
   const restart = useRef(() => {})
-  const desktopChords = runtime === 'desktop' && (platform === 'macos' || platform === 'windows')
+  const desktopChords = runtime === 'desktop'
   const targetId = target.id
   const stale = revision !== config.revision
   const report = (text: string): void => { setMessage(text); onError(text) }
@@ -172,8 +172,8 @@ EditorProps) {
         {captured && message === '' ? <ShortcutKeys keys={describeBinding(candidate).keys} className={css.recorded} /> : t('record')}
       </button>
     </div>
-    <span id={descriptionId} className={css.srOnly}>{message || (desktopChords ? '' : t(runtime === 'web'
-      ? platform === 'windows' ? 'windows-web-help' : platform === 'macos' ? 'macos-web-help' : 'web-help' : 'record-help'))}</span>
+    <span id={descriptionId} className={css.srOnly}>{message || (desktopChords ? '' : t(
+      platform === 'windows' ? 'windows-web-help' : platform === 'macos' ? 'macos-web-help' : 'web-help'))}</span>
     {review}
     {retry !== null && !stale && <button type="button" className={css.inlineAction} disabled={readonly}
       onClick={() => { capture(retry, target.id) }}>{t('retry-save')}</button>}

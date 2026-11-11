@@ -7,7 +7,7 @@ import type { DesktopShortcutInput, ShortcutCommandId } from '../src/protocol.ts
 
 afterEach(() => { document.body.replaceChildren() })
 
-it.each(['macos', 'windows'] as const)('prioritizes %s custom native bindings across editable and terminal regions and modals with revision checks', (platform) => {
+it.each(['macos', 'windows', 'linux'] as const)('prioritizes %s custom native bindings across editable and terminal regions and modals with revision checks', (platform) => {
   const registry = new ShortcutRegistry('desktop', platform)
   const run = vi.fn()
   registry.register({ id: 'session.new' as ShortcutCommandId, label: () => 'New', aliases: [],
@@ -24,7 +24,7 @@ it.each(['macos', 'windows'] as const)('prioritizes %s custom native bindings ac
   const off = installNativeKeyboard(window, { subscribe: (listener) => { deliver = listener; return () => {} }, closeWindow: vi.fn() },
     registry, () => registry.config.getSnapshot(), reset)
   const input: DesktopShortcutInput = { kind: 'keyboard', frameName: '', revision: registry.config.getSnapshot().revision,
-    code: 'KeyC', control: platform === 'windows', alt: false, shift: false, meta: platform === 'macos', repeat: false }
+    code: 'KeyC', control: platform !== 'macos', alt: false, shift: false, meta: platform === 'macos', repeat: false }
   const target = document.createElement('textarea')
   const terminal = document.createElement('div')
   terminal.className = 'xterm'; terminal.append(target); document.body.append(terminal)
@@ -101,7 +101,7 @@ it('rejects old configuration and iframe identities, consumes repeats, and invok
   expect(release).toHaveBeenCalledTimes(1)
 })
 
-it.each(['macos', 'windows'] as const)('runs a custom %s chord across text fields and verified embedded pages, once per press', (platform) => {
+it.each(['macos', 'windows', 'linux'] as const)('runs a custom %s chord across text fields and verified embedded pages, once per press', (platform) => {
   const registry = new ShortcutRegistry('desktop', platform)
   const run = vi.fn()
   registry.register({ id: 'session.new' as ShortcutCommandId, label: () => 'New', aliases: [], defaults: {},

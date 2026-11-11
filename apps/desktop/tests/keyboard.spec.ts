@@ -18,17 +18,21 @@ const overlays = await vi.hoisted(async () => {
   const { EventEmitter } = await import('node:events')
   class Window extends EventEmitter {
     private destroyed = false
-    readonly webContents = { setWindowOpenHandler: vi.fn() }
+    readonly webContents = Object.assign(new EventEmitter(), { setWindowOpenHandler: vi.fn(),
+      focus: vi.fn(), isDestroyed: () => this.destroyed, loadURL: vi.fn(async () => {}),
+      close: () => { this.destroyed = true; this.webContents.emit('destroyed') },
+    })
     readonly focus = vi.fn()
     readonly show = vi.fn()
     readonly setBounds = vi.fn()
+    readonly setBackgroundColor = vi.fn()
     setMenu() {}
     isDestroyed() { return this.destroyed }
-    destroy() { this.destroyed = true; this.emit('closed') }
+    destroy() { this.destroyed = true; this.webContents.emit('destroyed') }
   }
   return { Window }
 })
-vi.mock('electron', () => ({ ipcMain: ipc, BrowserWindow: overlays.Window, app: { isPackaged: true }, session: { fromPartition: () => ({
+vi.mock('electron', () => ({ ipcMain: ipc, BrowserWindow: overlays.Window, WebContentsView: overlays.Window, app: { isPackaged: true }, session: { fromPartition: () => ({
   setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn(), setDevicePermissionHandler: vi.fn(),
   setDisplayMediaRequestHandler: vi.fn(), on: vi.fn(), webRequest: { onBeforeRequest: vi.fn() },
 }) } }))
@@ -89,7 +93,7 @@ async function fixture(platform: 'macos' | 'windows' | 'linux' = 'macos') {
   let current: WindowFixture | undefined = window
   const updateMenu = vi.fn()
   const updateOverlays = new DesktopUpdateOverlays()
-  const keyboard = installFixture(() => current, root, platform, updateMenu, window => updateOverlays.input(window as BrowserWindow))
+  const keyboard = installFixture(() => current, root, platform, updateMenu, window => updateOverlays.input(window))
   keyboard.attach(current)
   onTestFinished(() => { keyboard.dispose() })
   const handlers = new Map<string, (event: InvokeFixture, ...args: unknown[]) => unknown>(
@@ -108,12 +112,12 @@ function updateOverlayFixture(f: Awaited<ReturnType<typeof fixture>>) {
   onTestFinished(() => { platform.mockRestore() })
   const parent: WindowFixture & Pick<BrowserWindow, 'getContentBounds'> = Object.assign(f.window, {
     getContentBounds: () => ({ x: 0, y: 0, width: 900, height: 650 }),
+    contentView: { addChildView: vi.fn(), removeChildView: vi.fn() },
   })
   Object.assign(f.contents, { insertCSS: vi.fn(async () => 'blur'), removeInsertedCSS: vi.fn(async () => {}) })
   return () => {
-    const overlay = f.updateOverlays.create(parent as BrowserWindow, 'test-overlay-preload', 'Update', false)
+    const overlay = f.updateOverlays.create(parent as BrowserWindow, 'test-overlay-preload')
     onTestFinished(() => { if (!overlay.isDestroyed()) overlay.destroy() })
-    expect(vi.spyOn(overlay, 'show')).not.toHaveBeenCalled()
     return overlay
   }
 }
@@ -316,7 +320,7 @@ it('routes embedded input once, follows rebindings, and guards native window clo
 
 it.each([
   ['browser.new', 'KeyT'], ['session.new', 'KeyN'],
-])('forwards Linux %s from embedded frames while leaving main-document input to the DOM', async (id, code) => {
+])('forwards Linux %s from main and embedded frames through native input', async (id, code) => {
   const f = await fixture('linux')
   const initial = await f.call<ShortcutConfigSnapshot>(DESKTOP_IPC.shortcutsGet,
     [{ id, defaults: desktopDefaults({ code, modifiers: ['primary'] }) }])
@@ -325,9 +329,11 @@ it.each([
   const preventDefault = vi.fn()
   f.contents.send.mockClear()
   f.contents.emit('before-input-event', { preventDefault }, input)
-  expect(preventDefault).not.toHaveBeenCalled()
-  expect(f.contents.send).not.toHaveBeenCalled()
+  expect(preventDefault).toHaveBeenCalledOnce()
+  expect(f.contents.send).toHaveBeenCalledExactlyOnceWith(DESKTOP_IPC.shortcutsInput,
+    expect.objectContaining({ kind: 'keyboard', code, revision: initial.revision }))
 
+  preventDefault.mockClear(); f.contents.send.mockClear()
   Object.assign(f.contents, { focusedFrame: { name: 'browser', parent: f.frame } })
   f.contents.emit('before-input-event', { preventDefault }, input)
   expect(preventDefault).toHaveBeenCalledOnce()
@@ -385,7 +391,7 @@ it('refreshes the native menu only when its accelerator or availability changes'
   expect(f.updateMenu).toHaveBeenCalledTimes(3)
 })
 
-it.each(['macos', 'windows'] as const)('prioritizes %s custom editing bindings before both main and embedded frame handlers', async (platform) => {
+it.each(['macos', 'windows', 'linux'] as const)('prioritizes %s custom editing bindings before both main and embedded frame handlers', async (platform) => {
   const f = await fixture(platform)
   const initial = await f.call<ShortcutConfigSnapshot>(DESKTOP_IPC.shortcutsGet,
     [{ id: 'session.new', defaults: desktopDefaults({ code: 'KeyN', modifiers: ['primary'] }) }])
@@ -393,7 +399,7 @@ it.each(['macos', 'windows'] as const)('prioritizes %s custom editing bindings b
     { type: 'set', id: 'session.new', binding: { code: 'KeyC', modifiers: ['primary'] } }, initial.revision)
   expect(saved.status).toBe('saved')
   const input = { modifiers: [], type: 'keyDown', code: 'KeyC', key: 'c', meta: platform === 'macos',
-    control: platform === 'windows', alt: false, shift: false, isAutoRepeat: false, isComposing: false }
+    control: platform !== 'macos', alt: false, shift: false, isAutoRepeat: false, isComposing: false }
   const preventDefault = vi.fn()
   const press = (changes = {}) => f.contents.emit('before-input-event', { preventDefault }, { ...input, ...changes })
   f.contents.send.mockClear()
@@ -425,7 +431,7 @@ it.each(['macos', 'windows'] as const)('prioritizes %s custom editing bindings b
   expect(f.contents.setIgnoreMenuShortcuts).toHaveBeenLastCalledWith(false)
 })
 
-it.each(['macos', 'windows'] as const)('intercepts complete %s chords once and leaves their first key untouched', async (platform) => {
+it.each(['macos', 'windows', 'linux'] as const)('intercepts complete %s chords once and leaves their first key untouched', async (platform) => {
   const f = await fixture(platform)
   const initial = await f.call<ShortcutConfigSnapshot>(DESKTOP_IPC.shortcutsGet,
     [{ id: 'page.close', defaults: desktopDefaults({ code: 'KeyW', modifiers: ['primary'] }) }])
@@ -531,7 +537,7 @@ it('restores shortcut interception after native Edit delivery fails', async () =
   expect(f.contents.sendInputEvent).toHaveBeenCalledOnce()
 })
 
-it.each(['macos', 'windows'] as const)('intercepts %s standalone custom keys and clears held state when preferences change', async (platform) => {
+it.each(['macos', 'windows', 'linux'] as const)('intercepts %s standalone custom keys and clears held state when preferences change', async (platform) => {
   const f = await fixture(platform)
   let snapshot = await f.call<ShortcutConfigSnapshot>(DESKTOP_IPC.shortcutsGet, f.definitions)
   for (const code of ['KeyA', 'F1', 'ArrowLeft', 'Escape', 'Tab', 'Enter']) {
@@ -548,7 +554,7 @@ it.each(['macos', 'windows'] as const)('intercepts %s standalone custom keys and
   }
 })
 
-it.each(['macos', 'windows'] as const)('keeps %s native interception identical for inherited, saved and reset bindings', async (platform) => {
+it.each(['macos', 'windows', 'linux'] as const)('keeps %s native interception identical for inherited, saved and reset bindings', async (platform) => {
   const f = await fixture(platform)
   let snapshot = await f.call<ShortcutConfigSnapshot>(DESKTOP_IPC.shortcutsGet, f.definitions)
   for (const operation of [null,
@@ -563,7 +569,7 @@ it.each(['macos', 'windows'] as const)('keeps %s native interception identical f
       const preventDefault = vi.fn()
       f.contents.send.mockClear()
       f.contents.emit('before-input-event', { preventDefault }, { type: 'keyDown', code: 'KeyB', key: 'b', modifiers: [],
-        control: platform === 'windows', meta: platform === 'macos', alt: false, shift: false, isAutoRepeat: false, isComposing: false })
+        control: platform !== 'macos', meta: platform === 'macos', alt: false, shift: false, isAutoRepeat: false, isComposing: false })
       expect(preventDefault).toHaveBeenCalledOnce()
       expect(f.contents.send).toHaveBeenLastCalledWith(DESKTOP_IPC.shortcutsInput,
         expect.objectContaining({ kind: embedded ? 'iframe' : 'keyboard', code: 'KeyB', revision: snapshot.revision }))
@@ -601,7 +607,7 @@ it('delivers a fresh unbound key release after macOS omitted the previous Comman
   expect(preventDefault).not.toHaveBeenCalled()
 })
 
-it.each(['macos', 'windows'] as const)('releases %s native input when a saved binding overlaps a mounted fixed action', async (platform) => {
+it.each(['macos', 'windows', 'linux'] as const)('releases %s native input when a saved binding overlaps a mounted fixed action', async (platform) => {
   const f = await fixture(platform)
   const initial = await f.call<ShortcutConfigSnapshot>(DESKTOP_IPC.shortcutsGet, f.definitions)
   const saved = await f.call<ShortcutSaveResult>(DESKTOP_IPC.shortcutsEdit,
@@ -617,7 +623,7 @@ it.each(['macos', 'windows'] as const)('releases %s native input when a saved bi
   expect(f.contents.send).not.toHaveBeenCalled()
 })
 
-it.each(['macos', 'windows'] as const)('keeps %s chord presses singular across native interception and renderer key delivery', async (platform) => {
+it.each(['macos', 'windows', 'linux'] as const)('keeps %s chord presses singular across native interception and renderer key delivery', async (platform) => {
   const f = await fixture(platform)
   const initial = await f.call<ShortcutConfigSnapshot>(DESKTOP_IPC.shortcutsGet, f.definitions)
   const saved = await f.call<ShortcutSaveResult>(DESKTOP_IPC.shortcutsEdit,
@@ -659,7 +665,7 @@ it.each(['macos', 'windows'] as const)('keeps %s chord presses singular across n
   expect(rendererReleases.filter(code => code === 'KeyG')).toHaveLength(5)
 })
 
-it.each(['macos', 'windows'] as const)('requires fresh %s chord presses when Electron omits intercepted key releases', async (platform) => {
+it.each(['macos', 'windows', 'linux'] as const)('requires fresh %s chord presses when Electron omits intercepted key releases', async (platform) => {
   const f = await fixture(platform)
   const bindings = [
     { id: 'sidebar.left.toggle', binding: { code: 'KeyJ', secondCode: 'KeyK', modifiers: [] } },

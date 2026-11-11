@@ -9,8 +9,8 @@
  * Electron composes app-regions from window geometry in DOM order, ignoring
  * stacking: a drag rule on a content container overrides the no-drag of any
  * overlay mounted earlier, so its text and labels drag the window instead of
- * receiving clicks. Everything interactive opts out through ui-web base.css; a
- * box that selector cannot cover subtracts itself in its own sheet. Composed
+ * receiving clicks. Controls inside chrome rows opt out through ui-web base.css;
+ * covering boxes outside those rows subtract themselves explicitly. Composed
  * geometry itself is the browser lane's claim — ui-theme cannot see layout.
  */
 import { readFileSync } from 'node:fs'
@@ -25,11 +25,11 @@ const SHELL_SHEET = 'client/web/src/base.css'
 /** The mark that stylesheet's rule selects, as authored. */
 const SHELL_DRAG_SELECTOR = "html[data-platform='darwin'] [data-window-drag]"
 
-/** The frame's Windows caption row, relative to packages/; the other platform's chrome. */
-const WINDOWS_CAPTION = 'client/ui-layout/src/client/AppFrame.module.css'
+/** The frame's Windows/Linux caption row, relative to packages/; the other platform's chrome. */
+const DESKTOP_CAPTION = 'client/ui-layout/src/client/AppFrame.module.css'
 
 /** That caption row's selector, as authored. */
-const WINDOWS_CAPTION_SELECTOR = ':global([data-windows-titlebar]) .frame::before'
+const DESKTOP_CAPTION_SELECTOR = ':global([data-desktop-titlebar]) .frame::before'
 
 /** The mark a chrome row puts on the element that owns its drag. */
 const DRAG_MARK = 'data-window-drag'
@@ -105,6 +105,11 @@ const CHROME_ROWS: readonly ChromeRow[] = [
   {
     file: PLUGIN_MANAGER,
     selector: '.detailTop',
+    markup: 'client/ui-plugin-manager/src/client/PluginManagerPage.tsx',
+  },
+  {
+    file: PLUGIN_MANAGER,
+    selector: '.moreHead',
     markup: 'client/ui-plugin-manager/src/client/PluginManagerPage.tsx',
   },
   {
@@ -236,10 +241,10 @@ describe('window drag-region ownership', () => {
   it('declares the window drag surface in exactly two places', () => {
     // Rows mark themselves instead of each sheet declaring its own drag, so the
     // tree holds one darwin rule — the mark rule in the shell sheet — plus the
-    // Windows caption row, which is that platform's own chrome. A third
+    // Windows/Linux caption row, which is that desktop chrome. A third
     // declaration, a per-sheet row rule, or a darwin band on the frame fails here.
     expect(dragOwners()).toEqual([
-      { file: WINDOWS_CAPTION, selectors: [WINDOWS_CAPTION_SELECTOR] },
+      { file: DESKTOP_CAPTION, selectors: [DESKTOP_CAPTION_SELECTOR] },
       { file: SHELL_SHEET, selectors: [SHELL_DRAG_SELECTOR] },
     ])
   })

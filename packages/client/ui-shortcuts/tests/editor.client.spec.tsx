@@ -33,9 +33,11 @@ it('clears a pending Desktop key when a modifier changes', async () => {
   expect(f.storage.write).not.toHaveBeenCalled()
 })
 
-it.each(['web', 'desktop'] as const)('describes Linux recording constraints in %s', async (runtime) => {
-  const f = await mount({ runtime, platform: 'linux' })
-  expect(f.view.container.textContent).toContain(en[runtime === 'web' ? 'web-help' : 'record-help'])
+it.each(['web', 'desktop'] as const)('shows Linux %s recording guidance', async (runtime) => {
+  await mount({ runtime, platform: 'linux' })
+  const recorder = screen.getByRole('button', { name: en.record })
+  const help = document.getElementById(recorder.getAttribute('aria-describedby')!)
+  expect(help?.textContent).toBe(runtime === 'web' ? en['web-help'] : '')
 })
 
 it('ignores a Web dead-key composition before capturing another combination', async () => {
@@ -123,6 +125,8 @@ it.each([
   { platform: 'windows', code: 'KeyC', key: 'c', ctrlKey: true, keys: ['Ctrl', '+', 'C'] },
   { platform: 'windows', code: 'KeyN', key: 'N', shiftKey: true, keys: ['Shift', '+', 'N'] },
   { platform: 'windows', code: 'Tab', key: 'Tab', ctrlKey: true, keys: ['Ctrl', '+', 'Tab'] },
+  { platform: 'linux', code: 'KeyC', key: 'c', ctrlKey: true, keys: ['Ctrl', '+', 'C'] },
+  { platform: 'linux', code: 'Tab', key: 'Tab', ctrlKey: true, keys: ['Ctrl', '+', 'Tab'] },
   { platform: 'macos', code: 'KeyC', key: 'c', metaKey: true, keys: ['⌘', 'C'] },
   { platform: 'macos', code: 'KeyQ', key: 'q', metaKey: true, keys: ['⌘', 'Q'] },
   { platform: 'macos', code: 'ArrowLeft', key: 'ArrowLeft', altKey: true, keys: ['⌥', '←'] },
@@ -151,7 +155,7 @@ it('records macOS Web Option+Command+N reported as Dead and saves on Command rel
 
 it.each(([
   { runtime: 'web', platform: 'macos' }, { runtime: 'web', platform: 'windows' },
-  { runtime: 'desktop', platform: 'macos' }, { runtime: 'desktop', platform: 'windows' },
+  { runtime: 'desktop', platform: 'macos' }, { runtime: 'desktop', platform: 'windows' }, { runtime: 'desktop', platform: 'linux' },
 ] as const).flatMap(environment => ['KeyX', 'Tab'].map(code => ({ ...environment, code }))))('records four-modifier $code in $runtime on $platform', async ({ code, ...environment }) => {
   const f = await mount(environment)
   press(code, { ctrlKey: true, altKey: true, shiftKey: true })
@@ -212,7 +216,7 @@ it('ignores modifier-only input, repeat, IME, dead keys, and AltGraph', async ()
   expect(f.storage.write).not.toHaveBeenCalled()
 })
 
-it.each(['macos', 'windows'] as const)('ignores the accent character after a %s dead key is released', async (platform) => {
+it.each(['macos', 'windows', 'linux'] as const)('ignores the accent character after a %s dead key is released', async (platform) => {
   const f = await mount({ platform })
   const recorder = screen.getByRole('button', { name: en.record })
   await act(async () => {
@@ -373,7 +377,7 @@ it('accepts only one action while a write is pending', async () => {
   await act(async () => { settle({ status: 'saved', snapshot: f.registry.config.getSnapshot() }); await reply })
 })
 
-it.each((['macos', 'windows'] as const).flatMap(platform =>
+it.each((['macos', 'windows', 'linux'] as const).flatMap(platform =>
   ['KeyA', 'F1', 'ArrowLeft', 'Tab'].map(code => ({ platform, code }))))(
   'records standalone $code on $platform without canceling, moving focus, or clicking recorder actions', async ({ platform, code }) => {
     const f = await mount({ platform })
@@ -388,7 +392,7 @@ it.each((['macos', 'windows'] as const).flatMap(platform =>
     expect(f.registry.catalog.getSnapshot()[0]?.binding).toEqual({ code, modifiers: [] })
   })
 
-it.each(['macos', 'windows'] as const)('records %s overlapping keys in either order, including all four modifiers', async (platform) => {
+it.each(['macos', 'windows', 'linux'] as const)('records %s overlapping keys in either order, including all four modifiers', async (platform) => {
   const f = await mount({ platform })
   const recorder = screen.getByRole('button', { name: en.record }); recorder.focus()
   const modifiers = { ctrlKey: true, altKey: true, shiftKey: true, metaKey: true }
@@ -403,7 +407,7 @@ it.each(['macos', 'windows'] as const)('records %s overlapping keys in either or
   expect(f.registry.catalog.getSnapshot()[0]?.binding).toEqual({ code: 'KeyA', secondCode: 'KeyJ', modifiers: ['control', 'alt', 'shift', 'meta'] })
 })
 
-it.each(['macos', 'windows'] as const)('rejects %s fixed-action keys and their overlapping chords without replacing the current binding', async (platform) => {
+it.each(['macos', 'windows', 'linux'] as const)('rejects %s fixed-action keys and their overlapping chords without replacing the current binding', async (platform) => {
   const f = await mount({ platform })
   const recorder = screen.getByRole('button', { name: en.record })
   expect(screen.queryByRole('button', { name: 'Cancel recording' })).toBeNull()
@@ -432,7 +436,7 @@ it.each(['macos', 'windows'] as const)('rejects %s fixed-action keys and their o
   expect(f.registry.catalog.getSnapshot()[0]?.binding?.code).toBe('KeyB')
 })
 
-it.each(['macos', 'windows'] as const)('records only the first released key for sequential %s presses', async (platform) => {
+it.each(['macos', 'windows', 'linux'] as const)('records only the first released key for sequential %s presses', async (platform) => {
   const f = await mount({ platform })
   const recorder = screen.getByRole('button', { name: en.record }); recorder.focus()
   fireEvent.keyDown(recorder, { code: 'KeyA', key: 'a' })
@@ -445,7 +449,7 @@ it.each(['macos', 'windows'] as const)('records only the first released key for 
   expect(f.storage.write).toHaveBeenCalledOnce()
 })
 
-it.each(['macos', 'windows'] as const)('accepts a new %s combination after all keys of a rejected three-key draft are released', async (platform) => {
+it.each(['macos', 'windows', 'linux'] as const)('accepts a new %s combination after all keys of a rejected three-key draft are released', async (platform) => {
   const f = await mount({ platform })
   const recorder = screen.getByRole('button', { name: en.record }); recorder.focus()
   for (const code of ['KeyA', 'KeyB', 'KeyC']) fireEvent.keyDown(recorder, { code, key: code.slice(3) })
@@ -459,7 +463,7 @@ it.each(['macos', 'windows'] as const)('accepts a new %s combination after all k
   expect(f.registry.catalog.getSnapshot()[0]?.binding).toEqual({ code: 'KeyJ', modifiers: [] })
 })
 
-it.each(['macos', 'windows'] as const)('retries a %s command conflict while continuing to hold the modifier', async (platform) => {
+it.each(['macos', 'windows', 'linux'] as const)('retries a %s command conflict while continuing to hold the modifier', async (platform) => {
   const f = await mount({ platform, setup: (registry) => {
     registry.register({ id: 'other.toggle' as ShortcutCommandId, label: () => 'Other action', aliases: [],
       defaults: { [`desktop:${platform}`]: { code: 'KeyK', modifiers: ['primary'] } },
@@ -479,7 +483,7 @@ it.each(['macos', 'windows'] as const)('retries a %s command conflict while cont
   expect(f.registry.catalog.getSnapshot()[0]?.binding).toEqual({ code: 'KeyJ', modifiers: [platform === 'macos' ? 'meta' : 'control'] })
 })
 
-it.each(['macos', 'windows'] as const)('waits for the remaining %s chord keys before accepting a retry', async (platform) => {
+it.each(['macos', 'windows', 'linux'] as const)('waits for the remaining %s chord keys before accepting a retry', async (platform) => {
   const f = await mount({ platform })
   const recorder = screen.getByRole('button', { name: en.record })
   fireEvent.keyDown(recorder, { code: 'KeyA', key: 'a' })
@@ -550,7 +554,7 @@ it.each(['focus', 'composition'] as const)('abandons an unfinished Desktop recor
   expect(f.storage.write).not.toHaveBeenCalled()
 })
 
-it.each(['macos', 'windows'] as const)('retains %s Web Escape cancellation, Tab navigation and single-key validation', async (platform) => {
+it.each(['macos', 'windows', 'linux'] as const)('retains %s Web Escape cancellation, Tab navigation and single-key validation', async (platform) => {
   const f = await mount({ runtime: 'web', platform })
   press('KeyA', { metaKey: false })
   expect(f.onError).toHaveBeenCalledWith(en['modifier-required'])

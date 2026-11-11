@@ -3,6 +3,7 @@ name: Linux desktop
 on:
   push:
     branches: [main]
+    tags: ['linux-v*']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -22,7 +23,7 @@ permissions:
 
 concurrency:
   group: linux-desktop-${{ github.ref }}-${{ github.event_name }}${{ github.event_name == 'workflow_dispatch' && format('-{0}', inputs.architecture) || '' }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ !(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/linux-v')) }}
 
 env:
   DSH_TELEMETRY_DISABLED: '1'
@@ -43,6 +44,15 @@ jobs:
         with:
           node-version: '24'
           cache: pnpm
+      - name: Verify Linux release tag matches the desktop version
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/linux-v')
+        shell: bash
+        run: |
+          version=$(node -p "require('./apps/desktop/package.json').version")
+          if [[ "$GITHUB_REF_NAME" != "linux-v${version}" ]]; then
+            echo "Release tag $GITHUB_REF_NAME does not match desktop version $version" >&2
+            exit 1
+          fi
       - name: Install native build and Electron dependencies
         run: |
           sudo apt-get update
@@ -62,9 +72,18 @@ jobs:
           apps/desktop/tests/development-project.spec.ts
           apps/desktop/tests/development-launcher.spec.ts
           apps/desktop/tests/main-startup.spec.ts
+          apps/desktop/tests/welcome-window.spec.ts
+          apps/desktop/tests/linux-tray-host.spec.ts
+          apps/desktop/tests/preload-app.spec.ts
+          apps/desktop/tests/preload-windows.client.spec.ts
+          apps/desktop/tests/keyboard.spec.ts
           apps/desktop/tests/platform-view.spec.ts
           apps/desktop/tests/update-coordinator.spec.ts
-          apps/desktop-host/tests/office-engine.spec.ts
+          apps/desktop-host/tests/file-drag.spec.ts
+          packages/client/ui-layout/tests/app-frame.client.spec.tsx
+          packages/client/ui-sidebar/tests/sidebar-root.client.spec.tsx
+          packages/client/shortcuts/tests/native.client.spec.ts
+          packages/client/ui-shortcuts/tests/editor.client.spec.tsx
           --maxWorkers=2
       - name: Verify Linux guide translations
         run: pnpm run verify-translation-pairing README.md apps/desktop/README.md apps/desktop-host/README.md
@@ -72,10 +91,14 @@ jobs:
         run: pnpm run build
 
   package:
-    name: Package Linux ${{ inputs.architecture }}
-    if: github.event_name == 'workflow_dispatch' && inputs.package
+    name: Package Linux ${{ matrix.architecture }}
+    if: (github.event_name == 'workflow_dispatch' && inputs.package) || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/linux-v'))
     needs: check
-    runs-on: ${{ inputs.architecture == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        architecture: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.architecture) || '["x64","arm64"]') }}
+    runs-on: ${{ matrix.architecture == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 120
     steps:
       - name: Use runner-owned temporary directories
@@ -96,14 +119,132 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build native Linux artifacts
         env:
-          DESKTOP_PACKAGE_ARCH: ${{ inputs.architecture }}
+          DESKTOP_PACKAGE_ARCH: ${{ matrix.architecture }}
         run: pnpm run "package:desktop:linux:${DESKTOP_PACKAGE_ARCH}"
       - uses: actions/upload-artifact@v4
         with:
-          name: deepseek-harness-linux-${{ inputs.architecture }}-${{ github.sha }}
+          name: deepseek-harness-linux-${{ matrix.architecture }}-${{ github.sha }}
           path: |
-            apps/desktop/.desktop-build/targets/linux-${{ inputs.architecture }}/artifacts/*.AppImage
-            apps/desktop/.desktop-build/targets/linux-${{ inputs.architecture }}/artifacts/*.deb
-            apps/desktop/.desktop-build/targets/linux-${{ inputs.architecture }}/artifacts/*.rpm
+            apps/desktop/.desktop-build/targets/linux-${{ matrix.architecture }}/artifacts/*.AppImage
+            apps/desktop/.desktop-build/targets/linux-${{ matrix.architecture }}/artifacts/*.deb
+            apps/desktop/.desktop-build/targets/linux-${{ matrix.architecture }}/artifacts/*.rpm
           if-no-files-found: error
           retention-days: 14
+
+  release:
+    name: Publish Linux release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/linux-v')
+    needs: [check, package]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: deepseek-harness-linux-*-${{ github.sha }}
+          path: release-assets
+          merge-multiple: true
+      - name: Verify and checksum both architectures
+        shell: bash
+        run: |
+          for pattern in \
+            '*-x86_64.AppImage' '*-amd64.deb' '*-x86_64.rpm' \
+            '*-arm64.AppImage' '*-arm64.deb' '*-aarch64.rpm'; do
+            compgen -G "release-assets/${pattern}" > /dev/null || {
+              echo "Missing Linux release artifact matching ${pattern}" >&2
+              exit 1
+            }
+          done
+          shopt -s nullglob
+          packages=(release-assets/*.AppImage release-assets/*.deb release-assets/*.rpm)
+          if (( ${#packages[@]} != 6 )); then
+            echo "Expected exactly six Linux release packages, found ${#packages[@]}" >&2
+            exit 1
+          fi
+          (cd release-assets && sha256sum *.AppImage *.deb *.rpm > SHA256SUMS)
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd release-assets && sha256sum --check SHA256SUMS)
+
+          tag_commit=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_REF_NAME" --jq .sha)
+          if [[ "$tag_commit" != "$GITHUB_SHA" ]]; then
+            echo "Release tag $GITHUB_REF_NAME no longer points to build commit $GITHUB_SHA" >&2
+            exit 1
+          fi
+
+          cat > "$RUNNER_TEMP/release-notes.md" <<NOTES
+          Linux desktop build aligned with DeepSeek Harness ${GITHUB_REF_NAME#linux-v}. The application uses the shared Windows/macOS workspace UI with Linux native window controls, caption menus, shortcuts, and theme handling.
+
+          Choose the AppImage, Debian package, or RPM package for your CPU architecture. Updates are installed manually from this release. The arm64 graphical interface has not been interactively tested on an arm64 desktop.
+          NOTES
+
+          owner=${GITHUB_REPOSITORY%%/*}
+          repository=${GITHUB_REPOSITORY#*/}
+          release_metadata() {
+            gh api graphql \
+              -f query='query($owner: String!, $repository: String!, $tag: String!) { repository(owner: $owner, name: $repository) { release(tagName: $tag) { databaseId isDraft } } }' \
+              -f owner="$owner" -f repository="$repository" -f tag="$GITHUB_REF_NAME"
+          }
+
+          metadata=$(release_metadata)
+          release_id=$(jq -r '.data.repository.release.databaseId // empty' <<< "$metadata")
+          if [[ -z "$release_id" ]]; then
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --title "DeepSeek Harness Linux ${GITHUB_REF_NAME#linux-v}" \
+              --notes-file "$RUNNER_TEMP/release-notes.md" --prerelease --verify-tag --draft
+            for attempt in 1 2 3 4 5; do
+              metadata=$(release_metadata)
+              release_id=$(jq -r '.data.repository.release.databaseId // empty' <<< "$metadata")
+              [[ -n "$release_id" ]] && break
+              sleep 2
+            done
+            [[ -n "$release_id" ]] || { echo "Created draft release is not available" >&2; exit 1; }
+          fi
+
+          is_draft=$(jq -r '.data.repository.release.isDraft' <<< "$metadata")
+          release_endpoint="repos/$GITHUB_REPOSITORY/releases/$release_id"
+          release_json=$(gh api "$release_endpoint")
+          mapfile -t local_names < <(find release-assets -maxdepth 1 -type f -printf '%f\n' | sort)
+          for name in "${local_names[@]}"; do
+            file="release-assets/$name"
+            expected_digest="sha256:$(sha256sum "$file" | cut -d ' ' -f1)"
+            remote_digest=$(jq -r --arg name "$name" '[.assets[] | select(.name == $name) | .digest] | first // empty' <<< "$release_json")
+            if [[ -z "$remote_digest" ]]; then
+              if [[ "$is_draft" != true ]]; then
+                echo "Published release is missing $name; refusing to change it" >&2
+                exit 1
+              fi
+              gh release upload "$GITHUB_REF_NAME" "$file" --repo "$GITHUB_REPOSITORY"
+            elif [[ "$remote_digest" != "$expected_digest" ]]; then
+              echo "Release asset $name differs from this build; refusing to replace it" >&2
+              exit 1
+            fi
+          done
+
+          release_json=$(gh api "$release_endpoint")
+          mapfile -t remote_names < <(jq -r '.assets[].name' <<< "$release_json" | sort)
+          if [[ "${local_names[*]}" != "${remote_names[*]}" ]]; then
+            echo "Release asset names differ from this build" >&2
+            exit 1
+          fi
+          for name in "${local_names[@]}"; do
+            expected_digest="sha256:$(sha256sum "release-assets/$name" | cut -d ' ' -f1)"
+            remote_digest=$(jq -r --arg name "$name" '[.assets[] | select(.name == $name) | .digest] | first // empty' <<< "$release_json")
+            if [[ "$remote_digest" != "$expected_digest" ]]; then
+              echo "Release asset $name failed SHA-256 verification" >&2
+              exit 1
+            fi
+          done
+
+          if [[ "$is_draft" == true ]]; then
+            tag_commit=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_REF_NAME" --jq .sha)
+            if [[ "$tag_commit" != "$GITHUB_SHA" ]]; then
+              echo "Release tag $GITHUB_REF_NAME moved during asset upload" >&2
+              exit 1
+            fi
+            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false
+          fi

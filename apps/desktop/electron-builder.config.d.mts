@@ -5,6 +5,7 @@ export interface DesktopElectronBuilderConfig {
   readonly appId: string
   readonly productName: string
   readonly electronDist: string
+  readonly copyright: string
   readonly artifactName: string
   readonly protocols: readonly [{ readonly name: 'DeepSeek Harness'; readonly schemes: readonly ['dsh'] }]
   readonly directories: {
@@ -19,7 +20,10 @@ export interface DesktopElectronBuilderConfig {
     ...({ readonly from: string, readonly to: 'tray.ico' } | { readonly from: string, readonly to: 'dsh' | 'dsh/node_modules', readonly filter: readonly ['**/*'] })[],
   ]
   readonly mac: {
-    readonly extendInfo: { readonly NSMicrophoneUsageDescription: string }
+    readonly extendInfo: {
+      readonly CFBundleLocalizations: readonly string[]
+      readonly NSMicrophoneUsageDescription: string
+    }
     readonly entitlements: string
     readonly entitlementsInherit: string
     readonly identity: string | undefined
@@ -28,6 +32,7 @@ export interface DesktopElectronBuilderConfig {
     readonly signIgnore: readonly string[]
   }
   readonly dmg: {
+    readonly format: 'ULMO'
     readonly sign: boolean
     readonly writeUpdateInfo: boolean
   }
@@ -52,12 +57,13 @@ export interface DesktopElectronBuilderConfig {
   readonly deb: { readonly packageName: string }
   readonly rpm: { readonly packageName: string }
   readonly nsis: {
+    readonly uninstallDisplayName: '${productName}'
     readonly include: string
     readonly oneClick: false
     readonly perMachine: false
     readonly allowElevation: false
     readonly allowToChangeInstallationDirectory: false
-    readonly installerLanguages: readonly ['en_US', 'zh_CN']
+    readonly installerLanguages: readonly string[]
   }
   readonly beforeBuild: () => Promise<boolean>
   readonly beforePack: (context: BeforePackContext) => Promise<void>

@@ -1,10 +1,10 @@
-/** Windows caption menu labels and native popup anchors, isolated from the Web client. */
+/** Desktop caption menu labels and native popup anchors, isolated from the Web client. */
 import { ipcRenderer } from 'electron'
 import { DESKTOP_IPC } from './ipc.ts'
 import { resolveDesktopLocale } from './locale.ts'
 
 /**
- * Mount the Windows caption menubar without moving focus out of the active editor.
+ * Mount the Windows/Linux caption menubar without moving focus out of the active editor.
  * @returns Language refresh and document teardown operations.
  */
 export function installWindowsMenu(): { update(): void; dispose(): void } {
@@ -13,13 +13,16 @@ export function installWindowsMenu(): { update(): void; dispose(): void } {
   const shadow = host.attachShadow({ mode: 'open' })
   const style = document.createElement('style')
   style.textContent = `
-    :host { position: fixed; top: 0; left: var(--dsh-windows-menu-start, 48px); z-index: 1100;
-      height: var(--dsh-windows-titlebar-height); display: flex; align-items: center;
+    :host { position: fixed; top: 0;
+      left: calc(env(titlebar-area-x, 0px) + var(--dsh-desktop-menu-start, 48px)); z-index: 1100;
+      height: var(--dsh-desktop-titlebar-height); display: flex; align-items: center;
+      max-width: max(0px, calc(env(titlebar-area-width, 100%) - var(--dsh-desktop-menu-start, 48px)));
+      overflow: hidden;
       font-family: var(--dsw-font-family); -webkit-app-region: no-drag; }
     [role=menubar] { display: flex; gap: 2px; }
     button { height: 28px; padding: 0 10px; border: 0; border-radius: 6px;
       background: transparent; color: var(--dsw-alias-label-secondary);
-      font: inherit; font-size: 14px; cursor: default; }
+      font: inherit; font-size: 14px; cursor: default; white-space: nowrap; }
     button:hover, button[aria-expanded=true] { background: var(--dsw-alias-interactive-bg-hover);
       color: var(--dsw-alias-label-primary); }
     button:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: -2px; }
