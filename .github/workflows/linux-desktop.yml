@@ -79,6 +79,8 @@ jobs:
           apps/desktop/tests/keyboard.spec.ts
           apps/desktop/tests/platform-view.spec.ts
           apps/desktop/tests/update-coordinator.spec.ts
+          apps/desktop/tests/desktop-edgeone.spec.ts
+          apps/desktop/tests/retain-desktop-ci.spec.ts
           apps/desktop-host/tests/file-drag.spec.ts
           packages/client/ui-layout/tests/app-frame.client.spec.tsx
           packages/client/ui-sidebar/tests/sidebar-root.client.spec.tsx

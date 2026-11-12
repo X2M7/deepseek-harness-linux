@@ -342,7 +342,7 @@ async function resolveRequestedBuildVersion(
   }
   const paths = desktopTargetBuildPaths(invocation.target.name, environment)
   return suggestDesktopBuildVersion({
-    productVersion, target: invocation.target.name,
+    productVersion, target: resolveDesktopAutoUpdateTarget(invocation.target.platform, invocation.target.arch),
     // Machine presets own packaging, not upload credentials; local auto numbering uses existing artifacts.
     environment: environment.DSH_PACKAGING_PRESET === undefined ? environment : {},
     // Unsigned builds land beside the signed output, so numbering has to read the directory this run writes.

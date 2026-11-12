@@ -124,3 +124,9 @@ it('rejects missing or ambiguous archival routing before packaging starts', () =
     dedicated: { label: 'dsh-shared', target: 'mac-arm64' }, other: { label: 'dsh-shared', target: 'mac-arm64' },
   }) })).toThrow('unique artifact routing label')
 })
+
+it.each(['x64', 'arm64'] as const)('rejects Linux %s from the macOS/Windows retention workflow', async (arch) => {
+  const env = { DSH_DESKTOP_TARGET_PLATFORM: 'linux', DSH_DESKTOP_TARGET_ARCH: arch }
+  expect(() => resolveDesktopRetentionRunner(env)).toThrow(`desktop retention: unsupported target linux-${arch}`)
+  await expect(retainDesktopCi(env)).rejects.toThrow(`desktop retention: unsupported target linux-${arch}`)
+})
